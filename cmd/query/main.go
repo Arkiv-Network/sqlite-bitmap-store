@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"time"
 
 	sqlitestore "github.com/Arkiv-Network/sqlite-bitmap-store"
 	"github.com/Arkiv-Network/sqlite-bitmap-store/query"
@@ -50,12 +51,15 @@ func main() {
 				return fmt.Errorf("failed to parse query: %w", err)
 			}
 
+			startTime := time.Now()
+
 			bitmap, err := q.Evaluate(context.Background(), *st.NewQueries())
 			if err != nil {
 				return fmt.Errorf("failed to evaluate query: %w", err)
 			}
 
 			fmt.Println(bitmap.GetCardinality())
+			fmt.Println(time.Since(startTime))
 
 			return nil
 
