@@ -10,6 +10,7 @@ import (
 
 type Querier interface {
 	InsertPayload(ctx context.Context, arg InsertPayloadParams) error
+	UpsertAttributeValueBitmap(ctx context.Context, arg UpsertAttributeValueBitmapParams) error
 }
 
 var _ Querier = (*Queries)(nil)

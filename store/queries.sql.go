@@ -37,3 +37,26 @@ func (q *Queries) InsertPayload(ctx context.Context, arg InsertPayloadParams) er
 	)
 	return err
 }
+
+const upsertAttributeValueBitmap = `-- name: UpsertAttributeValueBitmap :exec
+INSERT INTO ATTRIBUTES_VALUES_BITMAPS (name, value, type, bitmap)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (name, value, type) DO UPDATE SET bitmap = excluded.bitmap
+`
+
+type UpsertAttributeValueBitmapParams struct {
+	Name   string
+	Value  string
+	Type   string
+	Bitmap []byte
+}
+
+func (q *Queries) UpsertAttributeValueBitmap(ctx context.Context, arg UpsertAttributeValueBitmapParams) error {
+	_, err := q.exec(ctx, q.upsertAttributeValueBitmapStmt, upsertAttributeValueBitmap,
+		arg.Name,
+		arg.Value,
+		arg.Type,
+		arg.Bitmap,
+	)
+	return err
+}

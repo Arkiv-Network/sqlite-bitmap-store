@@ -27,6 +27,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.insertPayloadStmt, err = db.PrepareContext(ctx, insertPayload); err != nil {
 		return nil, fmt.Errorf("error preparing query InsertPayload: %w", err)
 	}
+	if q.upsertAttributeValueBitmapStmt, err = db.PrepareContext(ctx, upsertAttributeValueBitmap); err != nil {
+		return nil, fmt.Errorf("error preparing query UpsertAttributeValueBitmap: %w", err)
+	}
 	return &q, nil
 }
 
@@ -35,6 +38,11 @@ func (q *Queries) Close() error {
 	if q.insertPayloadStmt != nil {
 		if cerr := q.insertPayloadStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing insertPayloadStmt: %w", cerr)
+		}
+	}
+	if q.upsertAttributeValueBitmapStmt != nil {
+		if cerr := q.upsertAttributeValueBitmapStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing upsertAttributeValueBitmapStmt: %w", cerr)
 		}
 	}
 	return err
@@ -74,15 +82,17 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 }
 
 type Queries struct {
-	db                DBTX
-	tx                *sql.Tx
-	insertPayloadStmt *sql.Stmt
+	db                             DBTX
+	tx                             *sql.Tx
+	insertPayloadStmt              *sql.Stmt
+	upsertAttributeValueBitmapStmt *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
-		db:                tx,
-		tx:                tx,
-		insertPayloadStmt: q.insertPayloadStmt,
+		db:                             tx,
+		tx:                             tx,
+		insertPayloadStmt:              q.insertPayloadStmt,
+		upsertAttributeValueBitmapStmt: q.upsertAttributeValueBitmapStmt,
 	}
 }
