@@ -3,7 +3,8 @@
     "allow": [
       "Bash(nix develop:*)",
       "Bash(direnv allow:*)",
-      "Bash(sqlc generate:*)"
+      "Bash(sqlc generate:*)",
+      "Bash(cat:*)"
     ]
   }
 }
