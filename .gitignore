@@ -30,7 +30,6 @@
 /geth*.tar.gz.asc
 /geth*.zip.sig
 /geth*.zip.asc
-store/
 bridgette
 
 # travis
