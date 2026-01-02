@@ -5,9 +5,11 @@ go 1.25.5
 require (
 	github.com/Arkiv-Network/arkiv-events v0.0.3
 	github.com/RoaringBitmap/roaring v1.9.4
+	github.com/alecthomas/participle/v2 v2.1.4
 	github.com/ethereum/go-ethereum v1.16.7
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/mattn/go-sqlite3 v1.14.33
+	github.com/stretchr/testify v1.10.0
 	github.com/urfave/cli/v2 v2.27.5
 )
 
@@ -40,6 +42,7 @@ require (
 	github.com/pingcap/failpoint v0.0.0-20240528011301-b51a646c7c86 // indirect
 	github.com/pingcap/log v1.1.0 // indirect
 	github.com/pingcap/tidb/pkg/parser v0.0.0-20250324122243-d51e00e5bbf0 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/riza-io/grpc-go v0.2.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect

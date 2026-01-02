@@ -12,10 +12,28 @@ type Querier interface {
 	DeleteNumericAttributeValueBitmap(ctx context.Context, arg DeleteNumericAttributeValueBitmapParams) error
 	DeletePayloadForEntityKey(ctx context.Context, entityKey []byte) error
 	DeleteStringAttributeValueBitmap(ctx context.Context, arg DeleteStringAttributeValueBitmapParams) error
+	EvaluateNumericAttributeValueEqual(ctx context.Context, arg EvaluateNumericAttributeValueEqualParams) (*Bitmap, error)
+	EvaluateNumericAttributeValueGreaterOrEqualThan(ctx context.Context, arg EvaluateNumericAttributeValueGreaterOrEqualThanParams) ([]*Bitmap, error)
+	EvaluateNumericAttributeValueGreaterThan(ctx context.Context, arg EvaluateNumericAttributeValueGreaterThanParams) ([]*Bitmap, error)
+	EvaluateNumericAttributeValueInclusion(ctx context.Context, arg EvaluateNumericAttributeValueInclusionParams) ([]*Bitmap, error)
+	EvaluateNumericAttributeValueLessOrEqualThan(ctx context.Context, arg EvaluateNumericAttributeValueLessOrEqualThanParams) ([]*Bitmap, error)
+	EvaluateNumericAttributeValueLowerThan(ctx context.Context, arg EvaluateNumericAttributeValueLowerThanParams) ([]*Bitmap, error)
+	EvaluateNumericAttributeValueNotEqual(ctx context.Context, arg EvaluateNumericAttributeValueNotEqualParams) ([]*Bitmap, error)
+	EvaluateNumericAttributeValueNotInclusion(ctx context.Context, arg EvaluateNumericAttributeValueNotInclusionParams) ([]*Bitmap, error)
+	EvaluateStringAttributeValueEqual(ctx context.Context, arg EvaluateStringAttributeValueEqualParams) (*Bitmap, error)
+	EvaluateStringAttributeValueGlob(ctx context.Context, arg EvaluateStringAttributeValueGlobParams) ([]*Bitmap, error)
+	EvaluateStringAttributeValueGreaterOrEqualThan(ctx context.Context, arg EvaluateStringAttributeValueGreaterOrEqualThanParams) ([]*Bitmap, error)
+	EvaluateStringAttributeValueGreaterThan(ctx context.Context, arg EvaluateStringAttributeValueGreaterThanParams) ([]*Bitmap, error)
+	EvaluateStringAttributeValueInclusion(ctx context.Context, arg EvaluateStringAttributeValueInclusionParams) ([]*Bitmap, error)
+	EvaluateStringAttributeValueLessOrEqualThan(ctx context.Context, arg EvaluateStringAttributeValueLessOrEqualThanParams) ([]*Bitmap, error)
+	EvaluateStringAttributeValueLowerThan(ctx context.Context, arg EvaluateStringAttributeValueLowerThanParams) ([]*Bitmap, error)
+	EvaluateStringAttributeValueNotEqual(ctx context.Context, arg EvaluateStringAttributeValueNotEqualParams) ([]*Bitmap, error)
+	EvaluateStringAttributeValueNotGlob(ctx context.Context, arg EvaluateStringAttributeValueNotGlobParams) ([]*Bitmap, error)
+	EvaluateStringAttributeValueNotInclusion(ctx context.Context, arg EvaluateStringAttributeValueNotInclusionParams) ([]*Bitmap, error)
 	GetLastBlock(ctx context.Context) (int64, error)
-	GetNumericAttributeValueBitmap(ctx context.Context, arg GetNumericAttributeValueBitmapParams) ([]byte, error)
-	GetPayloadForEntityKey(ctx context.Context, entityKey []byte) (Payload, error)
-	GetStringAttributeValueBitmap(ctx context.Context, arg GetStringAttributeValueBitmapParams) ([]byte, error)
+	GetNumericAttributeValueBitmap(ctx context.Context, arg GetNumericAttributeValueBitmapParams) (*Bitmap, error)
+	GetPayloadForEntityKey(ctx context.Context, entityKey []byte) (GetPayloadForEntityKeyRow, error)
+	GetStringAttributeValueBitmap(ctx context.Context, arg GetStringAttributeValueBitmapParams) (*Bitmap, error)
 	UpsertLastBlock(ctx context.Context, block int64) error
 	UpsertNumericAttributeValueBitmap(ctx context.Context, arg UpsertNumericAttributeValueBitmapParams) error
 	UpsertPayload(ctx context.Context, arg UpsertPayloadParams) (uint64, error)

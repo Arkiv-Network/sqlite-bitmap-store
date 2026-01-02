@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/Arkiv-Network/sqlite-bitmap-store/store"
-	"github.com/RoaringBitmap/roaring/roaring64"
 )
 
 type numericBitmapOps struct {
@@ -29,21 +28,11 @@ func (o *numericBitmapOps) Add(ctx context.Context, name string, value uint64, i
 		return fmt.Errorf("failed to get numeric attribute %q value %q bitmap: %w", name, value, err)
 	}
 
-	bm := roaring64.New()
-
-	if len(bitmap) > 0 {
-		err = bm.UnmarshalBinary(bitmap)
-		if err != nil {
-			return fmt.Errorf("failed to unmarshal numeric attribute %q value %d bitmap: %w", name, value, err)
-		}
+	if bitmap == nil {
+		bitmap = store.NewBitmap()
 	}
 
-	bm.Add(id)
-
-	bitmap, err = bm.MarshalBinary()
-	if err != nil {
-		return fmt.Errorf("failed to marshal numeric attribute %q value %d bitmap: %w", name, value, err)
-	}
+	bitmap.Add(id)
 
 	err = o.st.UpsertNumericAttributeValueBitmap(
 		ctx,
@@ -72,18 +61,13 @@ func (o *numericBitmapOps) Remove(ctx context.Context, name string, value uint64
 		return fmt.Errorf("failed to get numeric attribute %q value %d bitmap: %w", name, value, err)
 	}
 
-	bm := roaring64.New()
-
-	if len(bitmap) > 0 {
-		err = bm.UnmarshalBinary(bitmap)
-		if err != nil {
-			return fmt.Errorf("failed to unmarshal numeric attribute %q value %d bitmap: %w", name, value, err)
-		}
+	if bitmap == nil {
+		bitmap = store.NewBitmap()
 	}
 
-	bm.Remove(id)
+	bitmap.Remove(id)
 
-	if bm.IsEmpty() {
+	if bitmap.IsEmpty() {
 		err = o.st.DeleteNumericAttributeValueBitmap(
 			ctx,
 			store.DeleteNumericAttributeValueBitmapParams{
@@ -95,10 +79,6 @@ func (o *numericBitmapOps) Remove(ctx context.Context, name string, value uint64
 			return fmt.Errorf("failed to delete numeric attribute %q value %d bitmap: %w", name, value, err)
 		}
 	} else {
-		bitmap, err = bm.MarshalBinary()
-		if err != nil {
-			return fmt.Errorf("failed to marshal numeric attribute %q value %d bitmap: %w", name, value, err)
-		}
 		err = o.st.UpsertNumericAttributeValueBitmap(
 			ctx,
 			store.UpsertNumericAttributeValueBitmapParams{

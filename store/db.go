@@ -33,6 +33,60 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.deleteStringAttributeValueBitmapStmt, err = db.PrepareContext(ctx, deleteStringAttributeValueBitmap); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteStringAttributeValueBitmap: %w", err)
 	}
+	if q.evaluateNumericAttributeValueEqualStmt, err = db.PrepareContext(ctx, evaluateNumericAttributeValueEqual); err != nil {
+		return nil, fmt.Errorf("error preparing query EvaluateNumericAttributeValueEqual: %w", err)
+	}
+	if q.evaluateNumericAttributeValueGreaterOrEqualThanStmt, err = db.PrepareContext(ctx, evaluateNumericAttributeValueGreaterOrEqualThan); err != nil {
+		return nil, fmt.Errorf("error preparing query EvaluateNumericAttributeValueGreaterOrEqualThan: %w", err)
+	}
+	if q.evaluateNumericAttributeValueGreaterThanStmt, err = db.PrepareContext(ctx, evaluateNumericAttributeValueGreaterThan); err != nil {
+		return nil, fmt.Errorf("error preparing query EvaluateNumericAttributeValueGreaterThan: %w", err)
+	}
+	if q.evaluateNumericAttributeValueInclusionStmt, err = db.PrepareContext(ctx, evaluateNumericAttributeValueInclusion); err != nil {
+		return nil, fmt.Errorf("error preparing query EvaluateNumericAttributeValueInclusion: %w", err)
+	}
+	if q.evaluateNumericAttributeValueLessOrEqualThanStmt, err = db.PrepareContext(ctx, evaluateNumericAttributeValueLessOrEqualThan); err != nil {
+		return nil, fmt.Errorf("error preparing query EvaluateNumericAttributeValueLessOrEqualThan: %w", err)
+	}
+	if q.evaluateNumericAttributeValueLowerThanStmt, err = db.PrepareContext(ctx, evaluateNumericAttributeValueLowerThan); err != nil {
+		return nil, fmt.Errorf("error preparing query EvaluateNumericAttributeValueLowerThan: %w", err)
+	}
+	if q.evaluateNumericAttributeValueNotEqualStmt, err = db.PrepareContext(ctx, evaluateNumericAttributeValueNotEqual); err != nil {
+		return nil, fmt.Errorf("error preparing query EvaluateNumericAttributeValueNotEqual: %w", err)
+	}
+	if q.evaluateNumericAttributeValueNotInclusionStmt, err = db.PrepareContext(ctx, evaluateNumericAttributeValueNotInclusion); err != nil {
+		return nil, fmt.Errorf("error preparing query EvaluateNumericAttributeValueNotInclusion: %w", err)
+	}
+	if q.evaluateStringAttributeValueEqualStmt, err = db.PrepareContext(ctx, evaluateStringAttributeValueEqual); err != nil {
+		return nil, fmt.Errorf("error preparing query EvaluateStringAttributeValueEqual: %w", err)
+	}
+	if q.evaluateStringAttributeValueGlobStmt, err = db.PrepareContext(ctx, evaluateStringAttributeValueGlob); err != nil {
+		return nil, fmt.Errorf("error preparing query EvaluateStringAttributeValueGlob: %w", err)
+	}
+	if q.evaluateStringAttributeValueGreaterOrEqualThanStmt, err = db.PrepareContext(ctx, evaluateStringAttributeValueGreaterOrEqualThan); err != nil {
+		return nil, fmt.Errorf("error preparing query EvaluateStringAttributeValueGreaterOrEqualThan: %w", err)
+	}
+	if q.evaluateStringAttributeValueGreaterThanStmt, err = db.PrepareContext(ctx, evaluateStringAttributeValueGreaterThan); err != nil {
+		return nil, fmt.Errorf("error preparing query EvaluateStringAttributeValueGreaterThan: %w", err)
+	}
+	if q.evaluateStringAttributeValueInclusionStmt, err = db.PrepareContext(ctx, evaluateStringAttributeValueInclusion); err != nil {
+		return nil, fmt.Errorf("error preparing query EvaluateStringAttributeValueInclusion: %w", err)
+	}
+	if q.evaluateStringAttributeValueLessOrEqualThanStmt, err = db.PrepareContext(ctx, evaluateStringAttributeValueLessOrEqualThan); err != nil {
+		return nil, fmt.Errorf("error preparing query EvaluateStringAttributeValueLessOrEqualThan: %w", err)
+	}
+	if q.evaluateStringAttributeValueLowerThanStmt, err = db.PrepareContext(ctx, evaluateStringAttributeValueLowerThan); err != nil {
+		return nil, fmt.Errorf("error preparing query EvaluateStringAttributeValueLowerThan: %w", err)
+	}
+	if q.evaluateStringAttributeValueNotEqualStmt, err = db.PrepareContext(ctx, evaluateStringAttributeValueNotEqual); err != nil {
+		return nil, fmt.Errorf("error preparing query EvaluateStringAttributeValueNotEqual: %w", err)
+	}
+	if q.evaluateStringAttributeValueNotGlobStmt, err = db.PrepareContext(ctx, evaluateStringAttributeValueNotGlob); err != nil {
+		return nil, fmt.Errorf("error preparing query EvaluateStringAttributeValueNotGlob: %w", err)
+	}
+	if q.evaluateStringAttributeValueNotInclusionStmt, err = db.PrepareContext(ctx, evaluateStringAttributeValueNotInclusion); err != nil {
+		return nil, fmt.Errorf("error preparing query EvaluateStringAttributeValueNotInclusion: %w", err)
+	}
 	if q.getLastBlockStmt, err = db.PrepareContext(ctx, getLastBlock); err != nil {
 		return nil, fmt.Errorf("error preparing query GetLastBlock: %w", err)
 	}
@@ -75,6 +129,96 @@ func (q *Queries) Close() error {
 	if q.deleteStringAttributeValueBitmapStmt != nil {
 		if cerr := q.deleteStringAttributeValueBitmapStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deleteStringAttributeValueBitmapStmt: %w", cerr)
+		}
+	}
+	if q.evaluateNumericAttributeValueEqualStmt != nil {
+		if cerr := q.evaluateNumericAttributeValueEqualStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evaluateNumericAttributeValueEqualStmt: %w", cerr)
+		}
+	}
+	if q.evaluateNumericAttributeValueGreaterOrEqualThanStmt != nil {
+		if cerr := q.evaluateNumericAttributeValueGreaterOrEqualThanStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evaluateNumericAttributeValueGreaterOrEqualThanStmt: %w", cerr)
+		}
+	}
+	if q.evaluateNumericAttributeValueGreaterThanStmt != nil {
+		if cerr := q.evaluateNumericAttributeValueGreaterThanStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evaluateNumericAttributeValueGreaterThanStmt: %w", cerr)
+		}
+	}
+	if q.evaluateNumericAttributeValueInclusionStmt != nil {
+		if cerr := q.evaluateNumericAttributeValueInclusionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evaluateNumericAttributeValueInclusionStmt: %w", cerr)
+		}
+	}
+	if q.evaluateNumericAttributeValueLessOrEqualThanStmt != nil {
+		if cerr := q.evaluateNumericAttributeValueLessOrEqualThanStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evaluateNumericAttributeValueLessOrEqualThanStmt: %w", cerr)
+		}
+	}
+	if q.evaluateNumericAttributeValueLowerThanStmt != nil {
+		if cerr := q.evaluateNumericAttributeValueLowerThanStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evaluateNumericAttributeValueLowerThanStmt: %w", cerr)
+		}
+	}
+	if q.evaluateNumericAttributeValueNotEqualStmt != nil {
+		if cerr := q.evaluateNumericAttributeValueNotEqualStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evaluateNumericAttributeValueNotEqualStmt: %w", cerr)
+		}
+	}
+	if q.evaluateNumericAttributeValueNotInclusionStmt != nil {
+		if cerr := q.evaluateNumericAttributeValueNotInclusionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evaluateNumericAttributeValueNotInclusionStmt: %w", cerr)
+		}
+	}
+	if q.evaluateStringAttributeValueEqualStmt != nil {
+		if cerr := q.evaluateStringAttributeValueEqualStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evaluateStringAttributeValueEqualStmt: %w", cerr)
+		}
+	}
+	if q.evaluateStringAttributeValueGlobStmt != nil {
+		if cerr := q.evaluateStringAttributeValueGlobStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evaluateStringAttributeValueGlobStmt: %w", cerr)
+		}
+	}
+	if q.evaluateStringAttributeValueGreaterOrEqualThanStmt != nil {
+		if cerr := q.evaluateStringAttributeValueGreaterOrEqualThanStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evaluateStringAttributeValueGreaterOrEqualThanStmt: %w", cerr)
+		}
+	}
+	if q.evaluateStringAttributeValueGreaterThanStmt != nil {
+		if cerr := q.evaluateStringAttributeValueGreaterThanStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evaluateStringAttributeValueGreaterThanStmt: %w", cerr)
+		}
+	}
+	if q.evaluateStringAttributeValueInclusionStmt != nil {
+		if cerr := q.evaluateStringAttributeValueInclusionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evaluateStringAttributeValueInclusionStmt: %w", cerr)
+		}
+	}
+	if q.evaluateStringAttributeValueLessOrEqualThanStmt != nil {
+		if cerr := q.evaluateStringAttributeValueLessOrEqualThanStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evaluateStringAttributeValueLessOrEqualThanStmt: %w", cerr)
+		}
+	}
+	if q.evaluateStringAttributeValueLowerThanStmt != nil {
+		if cerr := q.evaluateStringAttributeValueLowerThanStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evaluateStringAttributeValueLowerThanStmt: %w", cerr)
+		}
+	}
+	if q.evaluateStringAttributeValueNotEqualStmt != nil {
+		if cerr := q.evaluateStringAttributeValueNotEqualStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evaluateStringAttributeValueNotEqualStmt: %w", cerr)
+		}
+	}
+	if q.evaluateStringAttributeValueNotGlobStmt != nil {
+		if cerr := q.evaluateStringAttributeValueNotGlobStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evaluateStringAttributeValueNotGlobStmt: %w", cerr)
+		}
+	}
+	if q.evaluateStringAttributeValueNotInclusionStmt != nil {
+		if cerr := q.evaluateStringAttributeValueNotInclusionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evaluateStringAttributeValueNotInclusionStmt: %w", cerr)
 		}
 	}
 	if q.getLastBlockStmt != nil {
@@ -154,28 +298,64 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 }
 
 type Queries struct {
-	db                                    DBTX
-	tx                                    *sql.Tx
-	deleteNumericAttributeValueBitmapStmt *sql.Stmt
-	deletePayloadForEntityKeyStmt         *sql.Stmt
-	deleteStringAttributeValueBitmapStmt  *sql.Stmt
-	getLastBlockStmt                      *sql.Stmt
-	getNumericAttributeValueBitmapStmt    *sql.Stmt
-	getPayloadForEntityKeyStmt            *sql.Stmt
-	getStringAttributeValueBitmapStmt     *sql.Stmt
-	upsertLastBlockStmt                   *sql.Stmt
-	upsertNumericAttributeValueBitmapStmt *sql.Stmt
-	upsertPayloadStmt                     *sql.Stmt
-	upsertStringAttributeValueBitmapStmt  *sql.Stmt
+	db                                                  DBTX
+	tx                                                  *sql.Tx
+	deleteNumericAttributeValueBitmapStmt               *sql.Stmt
+	deletePayloadForEntityKeyStmt                       *sql.Stmt
+	deleteStringAttributeValueBitmapStmt                *sql.Stmt
+	evaluateNumericAttributeValueEqualStmt              *sql.Stmt
+	evaluateNumericAttributeValueGreaterOrEqualThanStmt *sql.Stmt
+	evaluateNumericAttributeValueGreaterThanStmt        *sql.Stmt
+	evaluateNumericAttributeValueInclusionStmt          *sql.Stmt
+	evaluateNumericAttributeValueLessOrEqualThanStmt    *sql.Stmt
+	evaluateNumericAttributeValueLowerThanStmt          *sql.Stmt
+	evaluateNumericAttributeValueNotEqualStmt           *sql.Stmt
+	evaluateNumericAttributeValueNotInclusionStmt       *sql.Stmt
+	evaluateStringAttributeValueEqualStmt               *sql.Stmt
+	evaluateStringAttributeValueGlobStmt                *sql.Stmt
+	evaluateStringAttributeValueGreaterOrEqualThanStmt  *sql.Stmt
+	evaluateStringAttributeValueGreaterThanStmt         *sql.Stmt
+	evaluateStringAttributeValueInclusionStmt           *sql.Stmt
+	evaluateStringAttributeValueLessOrEqualThanStmt     *sql.Stmt
+	evaluateStringAttributeValueLowerThanStmt           *sql.Stmt
+	evaluateStringAttributeValueNotEqualStmt            *sql.Stmt
+	evaluateStringAttributeValueNotGlobStmt             *sql.Stmt
+	evaluateStringAttributeValueNotInclusionStmt        *sql.Stmt
+	getLastBlockStmt                                    *sql.Stmt
+	getNumericAttributeValueBitmapStmt                  *sql.Stmt
+	getPayloadForEntityKeyStmt                          *sql.Stmt
+	getStringAttributeValueBitmapStmt                   *sql.Stmt
+	upsertLastBlockStmt                                 *sql.Stmt
+	upsertNumericAttributeValueBitmapStmt               *sql.Stmt
+	upsertPayloadStmt                                   *sql.Stmt
+	upsertStringAttributeValueBitmapStmt                *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
-		db:                                    tx,
-		tx:                                    tx,
-		deleteNumericAttributeValueBitmapStmt: q.deleteNumericAttributeValueBitmapStmt,
-		deletePayloadForEntityKeyStmt:         q.deletePayloadForEntityKeyStmt,
-		deleteStringAttributeValueBitmapStmt:  q.deleteStringAttributeValueBitmapStmt,
+		db:                                     tx,
+		tx:                                     tx,
+		deleteNumericAttributeValueBitmapStmt:  q.deleteNumericAttributeValueBitmapStmt,
+		deletePayloadForEntityKeyStmt:          q.deletePayloadForEntityKeyStmt,
+		deleteStringAttributeValueBitmapStmt:   q.deleteStringAttributeValueBitmapStmt,
+		evaluateNumericAttributeValueEqualStmt: q.evaluateNumericAttributeValueEqualStmt,
+		evaluateNumericAttributeValueGreaterOrEqualThanStmt: q.evaluateNumericAttributeValueGreaterOrEqualThanStmt,
+		evaluateNumericAttributeValueGreaterThanStmt:        q.evaluateNumericAttributeValueGreaterThanStmt,
+		evaluateNumericAttributeValueInclusionStmt:          q.evaluateNumericAttributeValueInclusionStmt,
+		evaluateNumericAttributeValueLessOrEqualThanStmt:    q.evaluateNumericAttributeValueLessOrEqualThanStmt,
+		evaluateNumericAttributeValueLowerThanStmt:          q.evaluateNumericAttributeValueLowerThanStmt,
+		evaluateNumericAttributeValueNotEqualStmt:           q.evaluateNumericAttributeValueNotEqualStmt,
+		evaluateNumericAttributeValueNotInclusionStmt:       q.evaluateNumericAttributeValueNotInclusionStmt,
+		evaluateStringAttributeValueEqualStmt:               q.evaluateStringAttributeValueEqualStmt,
+		evaluateStringAttributeValueGlobStmt:                q.evaluateStringAttributeValueGlobStmt,
+		evaluateStringAttributeValueGreaterOrEqualThanStmt:  q.evaluateStringAttributeValueGreaterOrEqualThanStmt,
+		evaluateStringAttributeValueGreaterThanStmt:         q.evaluateStringAttributeValueGreaterThanStmt,
+		evaluateStringAttributeValueInclusionStmt:           q.evaluateStringAttributeValueInclusionStmt,
+		evaluateStringAttributeValueLessOrEqualThanStmt:     q.evaluateStringAttributeValueLessOrEqualThanStmt,
+		evaluateStringAttributeValueLowerThanStmt:           q.evaluateStringAttributeValueLowerThanStmt,
+		evaluateStringAttributeValueNotEqualStmt:            q.evaluateStringAttributeValueNotEqualStmt,
+		evaluateStringAttributeValueNotGlobStmt:             q.evaluateStringAttributeValueNotGlobStmt,
+		evaluateStringAttributeValueNotInclusionStmt:        q.evaluateStringAttributeValueNotInclusionStmt,
 		getLastBlockStmt:                      q.getLastBlockStmt,
 		getNumericAttributeValueBitmapStmt:    q.getNumericAttributeValueBitmapStmt,
 		getPayloadForEntityKeyStmt:            q.getPayloadForEntityKeyStmt,

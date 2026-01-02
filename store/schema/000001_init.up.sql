@@ -18,7 +18,7 @@ CREATE TABLE last_block (
 
 INSERT INTO last_block (id, block) VALUES (1, 0);
 
-CREATE TABLE STRING_ATTRIBUTES_VALUES_BITMAPS (
+CREATE TABLE string_attributes_values_bitmaps (
     name TEXT NOT NULL,
     value TEXT NOT NULL,
     bitmap BLOB,
@@ -26,7 +26,7 @@ CREATE TABLE STRING_ATTRIBUTES_VALUES_BITMAPS (
 );
 
 
-CREATE TABLE NUMERIC_ATTRIBUTES_VALUES_BITMAPS (
+CREATE TABLE numeric_attributes_values_bitmaps (
     name TEXT NOT NULL,
     value INTEGER NOT NULL,
     bitmap BLOB,

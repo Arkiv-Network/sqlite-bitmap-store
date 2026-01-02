@@ -131,6 +131,12 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 		mainLoop:
 			for _, block := range batch.Batch.Blocks {
 
+				updates := 0
+				deletes := 0
+				extends := 0
+				creates := 0
+				ownerChanges := 0
+
 				if block.Number <= uint64(lastBlockFromDB) {
 					s.log.Info("skipping block", "block", block.Number, "lastBlockFromDB", lastBlockFromDB)
 					continue mainLoop
@@ -153,7 +159,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 					case operation.Create != nil:
 						// expiresAtBlock := blockNumber + operation.Create.BTL
-
+						creates++
 						key := operation.Create.Key
 
 						stringAttributes := maps.Clone(operation.Create.StringAttributes)
@@ -214,6 +220,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 							}
 						}
 					case operation.Update != nil:
+						updates++
 
 						updates := updatesMap[operation.Update.Key]
 						lastUpdate := updates[len(updates)-1]
@@ -223,8 +230,6 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						}
 
 						key := operation.Update.Key.Bytes()
-
-						s.log.Info("update", "key", common.BytesToHash(key).Hex())
 
 						latestPayload, err := st.GetPayloadForEntityKey(ctx, key)
 						if err != nil {
@@ -319,14 +324,13 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 					case operation.Delete != nil || operation.Expire != nil:
 
+						deletes++
 						var key []byte
 						if operation.Delete != nil {
 							key = common.Hash(*operation.Delete).Bytes()
 						} else {
 							key = common.Hash(*operation.Expire).Bytes()
 						}
-
-						s.log.Info("delete or expire", "key", common.BytesToHash(key).Hex())
 
 						latestPayload, err := st.GetPayloadForEntityKey(ctx, key)
 						if err != nil {
@@ -371,9 +375,9 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 					case operation.ExtendBTL != nil:
 
-						key := operation.ExtendBTL.Key.Bytes()
+						extends++
 
-						s.log.Info("extend BTL", "key", common.BytesToHash(key).Hex())
+						key := operation.ExtendBTL.Key.Bytes()
 
 						latestPayload, err := st.GetPayloadForEntityKey(ctx, key)
 						if err != nil {
@@ -421,8 +425,8 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						}
 
 					case operation.ChangeOwner != nil:
+						ownerChanges++
 						key := operation.ChangeOwner.Key.Bytes()
-						s.log.Info("change owner", "key", common.BytesToHash(key).Hex())
 
 						latestPayload, err := st.GetPayloadForEntityKey(ctx, key)
 						if err != nil {
@@ -476,6 +480,8 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 					}
 
 				}
+
+				s.log.Info("block updated", "block", block.Number, "creates", creates, "updates", updates, "deletes", deletes, "extends", extends, "ownerChanges", ownerChanges)
 
 			}
 

@@ -1,7 +1,7 @@
 version: "2"
 sql:
   - engine: "sqlite"
-    queries: "queries/queries.sql"
+    queries: "queries/"
     schema: "schema/"
     gen:
       go:
@@ -16,3 +16,13 @@ sql:
             go_type: "uint64"
           - column: "numeric_attributes_values_bitmaps.value"
             go_type: "uint64"
+          - column: "string_attributes_values_bitmaps.bitmap"
+            go_type: 
+              import: ""
+              type: "Bitmap"
+              pointer: true
+          - column: "numeric_attributes_values_bitmaps.bitmap"
+            go_type: 
+              import: ""
+              type: "Bitmap"
+              pointer: true

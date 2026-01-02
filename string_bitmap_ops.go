@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/Arkiv-Network/sqlite-bitmap-store/store"
-	"github.com/RoaringBitmap/roaring/roaring64"
 )
 
 type stringBitmapOps struct {
@@ -29,21 +28,11 @@ func (o *stringBitmapOps) Add(ctx context.Context, name string, value string, id
 		return fmt.Errorf("failed to get string attribute %q value %q bitmap: %w", name, value, err)
 	}
 
-	bm := roaring64.New()
-
-	if len(bitmap) > 0 {
-		err = bm.UnmarshalBinary(bitmap)
-		if err != nil {
-			return fmt.Errorf("failed to unmarshal string attribute %q value %d bitmap: %w", name, value, err)
-		}
+	if bitmap == nil {
+		bitmap = store.NewBitmap()
 	}
 
-	bm.Add(id)
-
-	bitmap, err = bm.MarshalBinary()
-	if err != nil {
-		return fmt.Errorf("failed to marshal string attribute %q value %q bitmap: %w", name, value, err)
-	}
+	bitmap.Add(id)
 
 	err = o.st.UpsertStringAttributeValueBitmap(
 		ctx,
@@ -72,18 +61,13 @@ func (o *stringBitmapOps) Remove(ctx context.Context, name string, value string,
 		return fmt.Errorf("failed to get string attribute %q value %q bitmap: %w", name, value, err)
 	}
 
-	bm := roaring64.New()
-
-	if len(bitmap) > 0 {
-		err = bm.UnmarshalBinary(bitmap)
-		if err != nil {
-			return fmt.Errorf("failed to unmarshal string attribute %q value %q bitmap: %w", name, value, err)
-		}
+	if bitmap == nil {
+		bitmap = store.NewBitmap()
 	}
 
-	bm.Remove(id)
+	bitmap.Remove(id)
 
-	if bm.IsEmpty() {
+	if bitmap.IsEmpty() {
 		err = o.st.DeleteStringAttributeValueBitmap(
 			ctx,
 			store.DeleteStringAttributeValueBitmapParams{
@@ -95,10 +79,6 @@ func (o *stringBitmapOps) Remove(ctx context.Context, name string, value string,
 			return fmt.Errorf("failed to delete string attribute %q value %q bitmap: %w", name, value, err)
 		}
 	} else {
-		bitmap, err = bm.MarshalBinary()
-		if err != nil {
-			return fmt.Errorf("failed to marshal string attribute %q value %q bitmap: %w", name, value, err)
-		}
 		err = o.st.UpsertStringAttributeValueBitmap(
 			ctx,
 			store.UpsertStringAttributeValueBitmapParams{

@@ -10,7 +10,7 @@ import (
 )
 
 const deleteNumericAttributeValueBitmap = `-- name: DeleteNumericAttributeValueBitmap :exec
-DELETE FROM NUMERIC_ATTRIBUTES_VALUES_BITMAPS
+DELETE FROM numeric_attributes_values_bitmaps
 WHERE name = ? AND value = ?
 `
 
@@ -35,7 +35,7 @@ func (q *Queries) DeletePayloadForEntityKey(ctx context.Context, entityKey []byt
 }
 
 const deleteStringAttributeValueBitmap = `-- name: DeleteStringAttributeValueBitmap :exec
-DELETE FROM STRING_ATTRIBUTES_VALUES_BITMAPS
+DELETE FROM string_attributes_values_bitmaps
 WHERE name = ? AND value = ?
 `
 
@@ -61,7 +61,7 @@ func (q *Queries) GetLastBlock(ctx context.Context) (int64, error) {
 }
 
 const getNumericAttributeValueBitmap = `-- name: GetNumericAttributeValueBitmap :one
-SELECT bitmap FROM NUMERIC_ATTRIBUTES_VALUES_BITMAPS
+SELECT bitmap FROM numeric_attributes_values_bitmaps
 WHERE name = ? AND value = ?
 `
 
@@ -70,9 +70,9 @@ type GetNumericAttributeValueBitmapParams struct {
 	Value uint64
 }
 
-func (q *Queries) GetNumericAttributeValueBitmap(ctx context.Context, arg GetNumericAttributeValueBitmapParams) ([]byte, error) {
+func (q *Queries) GetNumericAttributeValueBitmap(ctx context.Context, arg GetNumericAttributeValueBitmapParams) (*Bitmap, error) {
 	row := q.queryRow(ctx, q.getNumericAttributeValueBitmapStmt, getNumericAttributeValueBitmap, arg.Name, arg.Value)
-	var bitmap []byte
+	var bitmap *Bitmap
 	err := row.Scan(&bitmap)
 	return bitmap, err
 }
@@ -83,9 +83,18 @@ FROM payloads
 WHERE entity_key = ?
 `
 
-func (q *Queries) GetPayloadForEntityKey(ctx context.Context, entityKey []byte) (Payload, error) {
+type GetPayloadForEntityKeyRow struct {
+	EntityKey         []byte
+	ID                uint64
+	Payload           []byte
+	ContentType       string
+	StringAttributes  string
+	NumericAttributes string
+}
+
+func (q *Queries) GetPayloadForEntityKey(ctx context.Context, entityKey []byte) (GetPayloadForEntityKeyRow, error) {
 	row := q.queryRow(ctx, q.getPayloadForEntityKeyStmt, getPayloadForEntityKey, entityKey)
-	var i Payload
+	var i GetPayloadForEntityKeyRow
 	err := row.Scan(
 		&i.EntityKey,
 		&i.ID,
@@ -98,7 +107,7 @@ func (q *Queries) GetPayloadForEntityKey(ctx context.Context, entityKey []byte) 
 }
 
 const getStringAttributeValueBitmap = `-- name: GetStringAttributeValueBitmap :one
-SELECT bitmap FROM STRING_ATTRIBUTES_VALUES_BITMAPS
+SELECT bitmap FROM string_attributes_values_bitmaps
 WHERE name = ? AND value = ?
 `
 
@@ -107,9 +116,9 @@ type GetStringAttributeValueBitmapParams struct {
 	Value string
 }
 
-func (q *Queries) GetStringAttributeValueBitmap(ctx context.Context, arg GetStringAttributeValueBitmapParams) ([]byte, error) {
+func (q *Queries) GetStringAttributeValueBitmap(ctx context.Context, arg GetStringAttributeValueBitmapParams) (*Bitmap, error) {
 	row := q.queryRow(ctx, q.getStringAttributeValueBitmapStmt, getStringAttributeValueBitmap, arg.Name, arg.Value)
-	var bitmap []byte
+	var bitmap *Bitmap
 	err := row.Scan(&bitmap)
 	return bitmap, err
 }
@@ -126,7 +135,7 @@ func (q *Queries) UpsertLastBlock(ctx context.Context, block int64) error {
 }
 
 const upsertNumericAttributeValueBitmap = `-- name: UpsertNumericAttributeValueBitmap :exec
-INSERT INTO NUMERIC_ATTRIBUTES_VALUES_BITMAPS (name, value, bitmap)
+INSERT INTO numeric_attributes_values_bitmaps (name, value, bitmap)
 VALUES (?, ?, ?)
 ON CONFLICT (name, value) DO UPDATE SET bitmap = excluded.bitmap
 `
@@ -134,7 +143,7 @@ ON CONFLICT (name, value) DO UPDATE SET bitmap = excluded.bitmap
 type UpsertNumericAttributeValueBitmapParams struct {
 	Name   string
 	Value  uint64
-	Bitmap []byte
+	Bitmap *Bitmap
 }
 
 func (q *Queries) UpsertNumericAttributeValueBitmap(ctx context.Context, arg UpsertNumericAttributeValueBitmapParams) error {
@@ -180,7 +189,7 @@ func (q *Queries) UpsertPayload(ctx context.Context, arg UpsertPayloadParams) (u
 }
 
 const upsertStringAttributeValueBitmap = `-- name: UpsertStringAttributeValueBitmap :exec
-INSERT INTO STRING_ATTRIBUTES_VALUES_BITMAPS (name, value, bitmap)
+INSERT INTO string_attributes_values_bitmaps (name, value, bitmap)
 VALUES (?, ?, ?)
 ON CONFLICT (name, value) DO UPDATE SET bitmap = excluded.bitmap
 `
@@ -188,7 +197,7 @@ ON CONFLICT (name, value) DO UPDATE SET bitmap = excluded.bitmap
 type UpsertStringAttributeValueBitmapParams struct {
 	Name   string
 	Value  string
-	Bitmap []byte
+	Bitmap *Bitmap
 }
 
 func (q *Queries) UpsertStringAttributeValueBitmap(ctx context.Context, arg UpsertStringAttributeValueBitmapParams) error {

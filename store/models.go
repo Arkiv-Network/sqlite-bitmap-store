@@ -12,12 +12,12 @@ type LastBlock struct {
 type NumericAttributesValuesBitmap struct {
 	Name   string
 	Value  uint64
-	Bitmap []byte
+	Bitmap *Bitmap
 }
 
 type Payload struct {
-	EntityKey         []byte
 	ID                uint64
+	EntityKey         []byte
 	Payload           []byte
 	ContentType       string
 	StringAttributes  string
@@ -27,5 +27,5 @@ type Payload struct {
 type StringAttributesValuesBitmap struct {
 	Name   string
 	Value  string
-	Bitmap []byte
+	Bitmap *Bitmap
 }

@@ -23,29 +23,29 @@ FROM payloads
 WHERE entity_key = ?;
 
 -- name: UpsertStringAttributeValueBitmap :exec
-INSERT INTO STRING_ATTRIBUTES_VALUES_BITMAPS (name, value, bitmap)
+INSERT INTO string_attributes_values_bitmaps (name, value, bitmap)
 VALUES (?, ?, ?)
 ON CONFLICT (name, value) DO UPDATE SET bitmap = excluded.bitmap;
 
 -- name: DeleteStringAttributeValueBitmap :exec
-DELETE FROM STRING_ATTRIBUTES_VALUES_BITMAPS
+DELETE FROM string_attributes_values_bitmaps
 WHERE name = ? AND value = ?;
 
 -- name: GetStringAttributeValueBitmap :one
-SELECT bitmap FROM STRING_ATTRIBUTES_VALUES_BITMAPS
+SELECT bitmap FROM string_attributes_values_bitmaps
 WHERE name = ? AND value = ?;
 
 -- name: UpsertNumericAttributeValueBitmap :exec
-INSERT INTO NUMERIC_ATTRIBUTES_VALUES_BITMAPS (name, value, bitmap)
+INSERT INTO numeric_attributes_values_bitmaps (name, value, bitmap)
 VALUES (?, ?, ?)
 ON CONFLICT (name, value) DO UPDATE SET bitmap = excluded.bitmap;
 
 -- name: DeleteNumericAttributeValueBitmap :exec
-DELETE FROM NUMERIC_ATTRIBUTES_VALUES_BITMAPS
+DELETE FROM numeric_attributes_values_bitmaps
 WHERE name = ? AND value = ?;
 
 -- name: GetNumericAttributeValueBitmap :one
-SELECT bitmap FROM NUMERIC_ATTRIBUTES_VALUES_BITMAPS
+SELECT bitmap FROM numeric_attributes_values_bitmaps
 WHERE name = ? AND value = ?;
 
 -- name: UpsertLastBlock :exec
