@@ -11,3 +11,8 @@ sql:
         emit_interface: true
         emit_exact_table_names: false
         emit_empty_slices: true
+        overrides:
+          - column: "payloads.id"
+            go_type: "uint64"
+          - column: "numeric_attributes_values_bitmaps.value"
+            go_type: "uint64"

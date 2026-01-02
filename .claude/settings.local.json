@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(nix develop:*)",
-      "Bash(direnv allow:*)"
+      "Bash(direnv allow:*)",
+      "Bash(sqlc generate:*)"
     ]
   }
 }

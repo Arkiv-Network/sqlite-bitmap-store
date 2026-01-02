@@ -24,33 +24,97 @@ func New(db DBTX) *Queries {
 func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	q := Queries{db: db}
 	var err error
-	if q.getAttributeValueBitmapStmt, err = db.PrepareContext(ctx, getAttributeValueBitmap); err != nil {
-		return nil, fmt.Errorf("error preparing query GetAttributeValueBitmap: %w", err)
+	if q.deleteNumericAttributeValueBitmapStmt, err = db.PrepareContext(ctx, deleteNumericAttributeValueBitmap); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteNumericAttributeValueBitmap: %w", err)
 	}
-	if q.insertPayloadStmt, err = db.PrepareContext(ctx, insertPayload); err != nil {
-		return nil, fmt.Errorf("error preparing query InsertPayload: %w", err)
+	if q.deletePayloadForEntityKeyStmt, err = db.PrepareContext(ctx, deletePayloadForEntityKey); err != nil {
+		return nil, fmt.Errorf("error preparing query DeletePayloadForEntityKey: %w", err)
 	}
-	if q.upsertAttributeValueBitmapStmt, err = db.PrepareContext(ctx, upsertAttributeValueBitmap); err != nil {
-		return nil, fmt.Errorf("error preparing query UpsertAttributeValueBitmap: %w", err)
+	if q.deleteStringAttributeValueBitmapStmt, err = db.PrepareContext(ctx, deleteStringAttributeValueBitmap); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteStringAttributeValueBitmap: %w", err)
+	}
+	if q.getLastBlockStmt, err = db.PrepareContext(ctx, getLastBlock); err != nil {
+		return nil, fmt.Errorf("error preparing query GetLastBlock: %w", err)
+	}
+	if q.getNumericAttributeValueBitmapStmt, err = db.PrepareContext(ctx, getNumericAttributeValueBitmap); err != nil {
+		return nil, fmt.Errorf("error preparing query GetNumericAttributeValueBitmap: %w", err)
+	}
+	if q.getPayloadForEntityKeyStmt, err = db.PrepareContext(ctx, getPayloadForEntityKey); err != nil {
+		return nil, fmt.Errorf("error preparing query GetPayloadForEntityKey: %w", err)
+	}
+	if q.getStringAttributeValueBitmapStmt, err = db.PrepareContext(ctx, getStringAttributeValueBitmap); err != nil {
+		return nil, fmt.Errorf("error preparing query GetStringAttributeValueBitmap: %w", err)
+	}
+	if q.upsertLastBlockStmt, err = db.PrepareContext(ctx, upsertLastBlock); err != nil {
+		return nil, fmt.Errorf("error preparing query UpsertLastBlock: %w", err)
+	}
+	if q.upsertNumericAttributeValueBitmapStmt, err = db.PrepareContext(ctx, upsertNumericAttributeValueBitmap); err != nil {
+		return nil, fmt.Errorf("error preparing query UpsertNumericAttributeValueBitmap: %w", err)
+	}
+	if q.upsertPayloadStmt, err = db.PrepareContext(ctx, upsertPayload); err != nil {
+		return nil, fmt.Errorf("error preparing query UpsertPayload: %w", err)
+	}
+	if q.upsertStringAttributeValueBitmapStmt, err = db.PrepareContext(ctx, upsertStringAttributeValueBitmap); err != nil {
+		return nil, fmt.Errorf("error preparing query UpsertStringAttributeValueBitmap: %w", err)
 	}
 	return &q, nil
 }
 
 func (q *Queries) Close() error {
 	var err error
-	if q.getAttributeValueBitmapStmt != nil {
-		if cerr := q.getAttributeValueBitmapStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getAttributeValueBitmapStmt: %w", cerr)
+	if q.deleteNumericAttributeValueBitmapStmt != nil {
+		if cerr := q.deleteNumericAttributeValueBitmapStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteNumericAttributeValueBitmapStmt: %w", cerr)
 		}
 	}
-	if q.insertPayloadStmt != nil {
-		if cerr := q.insertPayloadStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing insertPayloadStmt: %w", cerr)
+	if q.deletePayloadForEntityKeyStmt != nil {
+		if cerr := q.deletePayloadForEntityKeyStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deletePayloadForEntityKeyStmt: %w", cerr)
 		}
 	}
-	if q.upsertAttributeValueBitmapStmt != nil {
-		if cerr := q.upsertAttributeValueBitmapStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing upsertAttributeValueBitmapStmt: %w", cerr)
+	if q.deleteStringAttributeValueBitmapStmt != nil {
+		if cerr := q.deleteStringAttributeValueBitmapStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteStringAttributeValueBitmapStmt: %w", cerr)
+		}
+	}
+	if q.getLastBlockStmt != nil {
+		if cerr := q.getLastBlockStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getLastBlockStmt: %w", cerr)
+		}
+	}
+	if q.getNumericAttributeValueBitmapStmt != nil {
+		if cerr := q.getNumericAttributeValueBitmapStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getNumericAttributeValueBitmapStmt: %w", cerr)
+		}
+	}
+	if q.getPayloadForEntityKeyStmt != nil {
+		if cerr := q.getPayloadForEntityKeyStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getPayloadForEntityKeyStmt: %w", cerr)
+		}
+	}
+	if q.getStringAttributeValueBitmapStmt != nil {
+		if cerr := q.getStringAttributeValueBitmapStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getStringAttributeValueBitmapStmt: %w", cerr)
+		}
+	}
+	if q.upsertLastBlockStmt != nil {
+		if cerr := q.upsertLastBlockStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing upsertLastBlockStmt: %w", cerr)
+		}
+	}
+	if q.upsertNumericAttributeValueBitmapStmt != nil {
+		if cerr := q.upsertNumericAttributeValueBitmapStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing upsertNumericAttributeValueBitmapStmt: %w", cerr)
+		}
+	}
+	if q.upsertPayloadStmt != nil {
+		if cerr := q.upsertPayloadStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing upsertPayloadStmt: %w", cerr)
+		}
+	}
+	if q.upsertStringAttributeValueBitmapStmt != nil {
+		if cerr := q.upsertStringAttributeValueBitmapStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing upsertStringAttributeValueBitmapStmt: %w", cerr)
 		}
 	}
 	return err
@@ -90,19 +154,35 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 }
 
 type Queries struct {
-	db                             DBTX
-	tx                             *sql.Tx
-	getAttributeValueBitmapStmt    *sql.Stmt
-	insertPayloadStmt              *sql.Stmt
-	upsertAttributeValueBitmapStmt *sql.Stmt
+	db                                    DBTX
+	tx                                    *sql.Tx
+	deleteNumericAttributeValueBitmapStmt *sql.Stmt
+	deletePayloadForEntityKeyStmt         *sql.Stmt
+	deleteStringAttributeValueBitmapStmt  *sql.Stmt
+	getLastBlockStmt                      *sql.Stmt
+	getNumericAttributeValueBitmapStmt    *sql.Stmt
+	getPayloadForEntityKeyStmt            *sql.Stmt
+	getStringAttributeValueBitmapStmt     *sql.Stmt
+	upsertLastBlockStmt                   *sql.Stmt
+	upsertNumericAttributeValueBitmapStmt *sql.Stmt
+	upsertPayloadStmt                     *sql.Stmt
+	upsertStringAttributeValueBitmapStmt  *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
-		db:                             tx,
-		tx:                             tx,
-		getAttributeValueBitmapStmt:    q.getAttributeValueBitmapStmt,
-		insertPayloadStmt:              q.insertPayloadStmt,
-		upsertAttributeValueBitmapStmt: q.upsertAttributeValueBitmapStmt,
+		db:                                    tx,
+		tx:                                    tx,
+		deleteNumericAttributeValueBitmapStmt: q.deleteNumericAttributeValueBitmapStmt,
+		deletePayloadForEntityKeyStmt:         q.deletePayloadForEntityKeyStmt,
+		deleteStringAttributeValueBitmapStmt:  q.deleteStringAttributeValueBitmapStmt,
+		getLastBlockStmt:                      q.getLastBlockStmt,
+		getNumericAttributeValueBitmapStmt:    q.getNumericAttributeValueBitmapStmt,
+		getPayloadForEntityKeyStmt:            q.getPayloadForEntityKeyStmt,
+		getStringAttributeValueBitmapStmt:     q.getStringAttributeValueBitmapStmt,
+		upsertLastBlockStmt:                   q.upsertLastBlockStmt,
+		upsertNumericAttributeValueBitmapStmt: q.upsertNumericAttributeValueBitmapStmt,
+		upsertPayloadStmt:                     q.upsertPayloadStmt,
+		upsertStringAttributeValueBitmapStmt:  q.upsertStringAttributeValueBitmapStmt,
 	}
 }

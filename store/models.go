@@ -4,22 +4,28 @@
 
 package store
 
-type AttributesValuesBitmap struct {
-	Name   string
-	Value  string
-	Type   string
-	Bitmap []byte
-}
-
 type LastBlock struct {
 	ID    int64
 	Block int64
 }
 
+type NumericAttributesValuesBitmap struct {
+	Name   string
+	Value  uint64
+	Bitmap []byte
+}
+
 type Payload struct {
-	ID                int64
+	EntityKey         []byte
+	ID                uint64
 	Payload           []byte
 	ContentType       string
 	StringAttributes  string
 	NumericAttributes string
+}
+
+type StringAttributesValuesBitmap struct {
+	Name   string
+	Value  string
+	Bitmap []byte
 }

@@ -9,9 +9,17 @@ import (
 )
 
 type Querier interface {
-	GetAttributeValueBitmap(ctx context.Context, arg GetAttributeValueBitmapParams) ([]byte, error)
-	InsertPayload(ctx context.Context, arg InsertPayloadParams) error
-	UpsertAttributeValueBitmap(ctx context.Context, arg UpsertAttributeValueBitmapParams) error
+	DeleteNumericAttributeValueBitmap(ctx context.Context, arg DeleteNumericAttributeValueBitmapParams) error
+	DeletePayloadForEntityKey(ctx context.Context, entityKey []byte) error
+	DeleteStringAttributeValueBitmap(ctx context.Context, arg DeleteStringAttributeValueBitmapParams) error
+	GetLastBlock(ctx context.Context) (int64, error)
+	GetNumericAttributeValueBitmap(ctx context.Context, arg GetNumericAttributeValueBitmapParams) ([]byte, error)
+	GetPayloadForEntityKey(ctx context.Context, entityKey []byte) (Payload, error)
+	GetStringAttributeValueBitmap(ctx context.Context, arg GetStringAttributeValueBitmapParams) ([]byte, error)
+	UpsertLastBlock(ctx context.Context, block int64) error
+	UpsertNumericAttributeValueBitmap(ctx context.Context, arg UpsertNumericAttributeValueBitmapParams) error
+	UpsertPayload(ctx context.Context, arg UpsertPayloadParams) (uint64, error)
+	UpsertStringAttributeValueBitmap(ctx context.Context, arg UpsertStringAttributeValueBitmapParams) error
 }
 
 var _ Querier = (*Queries)(nil)

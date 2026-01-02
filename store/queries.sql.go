@@ -9,72 +9,189 @@ import (
 	"context"
 )
 
-const getAttributeValueBitmap = `-- name: GetAttributeValueBitmap :one
-SELECT bitmap FROM ATTRIBUTES_VALUES_BITMAPS
-WHERE name = ? AND value = ? AND type = ?
+const deleteNumericAttributeValueBitmap = `-- name: DeleteNumericAttributeValueBitmap :exec
+DELETE FROM NUMERIC_ATTRIBUTES_VALUES_BITMAPS
+WHERE name = ? AND value = ?
 `
 
-type GetAttributeValueBitmapParams struct {
+type DeleteNumericAttributeValueBitmapParams struct {
 	Name  string
-	Value string
-	Type  string
+	Value uint64
 }
 
-func (q *Queries) GetAttributeValueBitmap(ctx context.Context, arg GetAttributeValueBitmapParams) ([]byte, error) {
-	row := q.queryRow(ctx, q.getAttributeValueBitmapStmt, getAttributeValueBitmap, arg.Name, arg.Value, arg.Type)
+func (q *Queries) DeleteNumericAttributeValueBitmap(ctx context.Context, arg DeleteNumericAttributeValueBitmapParams) error {
+	_, err := q.exec(ctx, q.deleteNumericAttributeValueBitmapStmt, deleteNumericAttributeValueBitmap, arg.Name, arg.Value)
+	return err
+}
+
+const deletePayloadForEntityKey = `-- name: DeletePayloadForEntityKey :exec
+DELETE FROM payloads
+WHERE entity_key = ?
+`
+
+func (q *Queries) DeletePayloadForEntityKey(ctx context.Context, entityKey []byte) error {
+	_, err := q.exec(ctx, q.deletePayloadForEntityKeyStmt, deletePayloadForEntityKey, entityKey)
+	return err
+}
+
+const deleteStringAttributeValueBitmap = `-- name: DeleteStringAttributeValueBitmap :exec
+DELETE FROM STRING_ATTRIBUTES_VALUES_BITMAPS
+WHERE name = ? AND value = ?
+`
+
+type DeleteStringAttributeValueBitmapParams struct {
+	Name  string
+	Value string
+}
+
+func (q *Queries) DeleteStringAttributeValueBitmap(ctx context.Context, arg DeleteStringAttributeValueBitmapParams) error {
+	_, err := q.exec(ctx, q.deleteStringAttributeValueBitmapStmt, deleteStringAttributeValueBitmap, arg.Name, arg.Value)
+	return err
+}
+
+const getLastBlock = `-- name: GetLastBlock :one
+SELECT block FROM last_block
+`
+
+func (q *Queries) GetLastBlock(ctx context.Context) (int64, error) {
+	row := q.queryRow(ctx, q.getLastBlockStmt, getLastBlock)
+	var block int64
+	err := row.Scan(&block)
+	return block, err
+}
+
+const getNumericAttributeValueBitmap = `-- name: GetNumericAttributeValueBitmap :one
+SELECT bitmap FROM NUMERIC_ATTRIBUTES_VALUES_BITMAPS
+WHERE name = ? AND value = ?
+`
+
+type GetNumericAttributeValueBitmapParams struct {
+	Name  string
+	Value uint64
+}
+
+func (q *Queries) GetNumericAttributeValueBitmap(ctx context.Context, arg GetNumericAttributeValueBitmapParams) ([]byte, error) {
+	row := q.queryRow(ctx, q.getNumericAttributeValueBitmapStmt, getNumericAttributeValueBitmap, arg.Name, arg.Value)
 	var bitmap []byte
 	err := row.Scan(&bitmap)
 	return bitmap, err
 }
 
-const insertPayload = `-- name: InsertPayload :exec
+const getPayloadForEntityKey = `-- name: GetPayloadForEntityKey :one
+SELECT entity_key, id, payload, content_type, string_attributes, numeric_attributes
+FROM payloads
+WHERE entity_key = ?
+`
+
+func (q *Queries) GetPayloadForEntityKey(ctx context.Context, entityKey []byte) (Payload, error) {
+	row := q.queryRow(ctx, q.getPayloadForEntityKeyStmt, getPayloadForEntityKey, entityKey)
+	var i Payload
+	err := row.Scan(
+		&i.EntityKey,
+		&i.ID,
+		&i.Payload,
+		&i.ContentType,
+		&i.StringAttributes,
+		&i.NumericAttributes,
+	)
+	return i, err
+}
+
+const getStringAttributeValueBitmap = `-- name: GetStringAttributeValueBitmap :one
+SELECT bitmap FROM STRING_ATTRIBUTES_VALUES_BITMAPS
+WHERE name = ? AND value = ?
+`
+
+type GetStringAttributeValueBitmapParams struct {
+	Name  string
+	Value string
+}
+
+func (q *Queries) GetStringAttributeValueBitmap(ctx context.Context, arg GetStringAttributeValueBitmapParams) ([]byte, error) {
+	row := q.queryRow(ctx, q.getStringAttributeValueBitmapStmt, getStringAttributeValueBitmap, arg.Name, arg.Value)
+	var bitmap []byte
+	err := row.Scan(&bitmap)
+	return bitmap, err
+}
+
+const upsertLastBlock = `-- name: UpsertLastBlock :exec
+INSERT INTO last_block (id, block)
+VALUES (1, ?)
+ON CONFLICT (id) DO UPDATE SET block = EXCLUDED.block
+`
+
+func (q *Queries) UpsertLastBlock(ctx context.Context, block int64) error {
+	_, err := q.exec(ctx, q.upsertLastBlockStmt, upsertLastBlock, block)
+	return err
+}
+
+const upsertNumericAttributeValueBitmap = `-- name: UpsertNumericAttributeValueBitmap :exec
+INSERT INTO NUMERIC_ATTRIBUTES_VALUES_BITMAPS (name, value, bitmap)
+VALUES (?, ?, ?)
+ON CONFLICT (name, value) DO UPDATE SET bitmap = excluded.bitmap
+`
+
+type UpsertNumericAttributeValueBitmapParams struct {
+	Name   string
+	Value  uint64
+	Bitmap []byte
+}
+
+func (q *Queries) UpsertNumericAttributeValueBitmap(ctx context.Context, arg UpsertNumericAttributeValueBitmapParams) error {
+	_, err := q.exec(ctx, q.upsertNumericAttributeValueBitmapStmt, upsertNumericAttributeValueBitmap, arg.Name, arg.Value, arg.Bitmap)
+	return err
+}
+
+const upsertPayload = `-- name: UpsertPayload :one
 INSERT INTO payloads (
-    id,
+    entity_key,
     payload,
     content_type,
     string_attributes,
     numeric_attributes
 ) VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (entity_key) DO UPDATE SET
+    payload = excluded.payload,
+    content_type = excluded.content_type,
+    string_attributes = excluded.string_attributes,
+    numeric_attributes = excluded.numeric_attributes
+RETURNING id
 `
 
-type InsertPayloadParams struct {
-	ID                int64
+type UpsertPayloadParams struct {
+	EntityKey         []byte
 	Payload           []byte
 	ContentType       string
 	StringAttributes  string
 	NumericAttributes string
 }
 
-func (q *Queries) InsertPayload(ctx context.Context, arg InsertPayloadParams) error {
-	_, err := q.exec(ctx, q.insertPayloadStmt, insertPayload,
-		arg.ID,
+func (q *Queries) UpsertPayload(ctx context.Context, arg UpsertPayloadParams) (uint64, error) {
+	row := q.queryRow(ctx, q.upsertPayloadStmt, upsertPayload,
+		arg.EntityKey,
 		arg.Payload,
 		arg.ContentType,
 		arg.StringAttributes,
 		arg.NumericAttributes,
 	)
-	return err
+	var id uint64
+	err := row.Scan(&id)
+	return id, err
 }
 
-const upsertAttributeValueBitmap = `-- name: UpsertAttributeValueBitmap :exec
-INSERT INTO ATTRIBUTES_VALUES_BITMAPS (name, value, type, bitmap)
-VALUES (?, ?, ?, ?)
-ON CONFLICT (name, value, type) DO UPDATE SET bitmap = excluded.bitmap
+const upsertStringAttributeValueBitmap = `-- name: UpsertStringAttributeValueBitmap :exec
+INSERT INTO STRING_ATTRIBUTES_VALUES_BITMAPS (name, value, bitmap)
+VALUES (?, ?, ?)
+ON CONFLICT (name, value) DO UPDATE SET bitmap = excluded.bitmap
 `
 
-type UpsertAttributeValueBitmapParams struct {
+type UpsertStringAttributeValueBitmapParams struct {
 	Name   string
 	Value  string
-	Type   string
 	Bitmap []byte
 }
 
-func (q *Queries) UpsertAttributeValueBitmap(ctx context.Context, arg UpsertAttributeValueBitmapParams) error {
-	_, err := q.exec(ctx, q.upsertAttributeValueBitmapStmt, upsertAttributeValueBitmap,
-		arg.Name,
-		arg.Value,
-		arg.Type,
-		arg.Bitmap,
-	)
+func (q *Queries) UpsertStringAttributeValueBitmap(ctx context.Context, arg UpsertStringAttributeValueBitmapParams) error {
+	_, err := q.exec(ctx, q.upsertStringAttributeValueBitmapStmt, upsertStringAttributeValueBitmap, arg.Name, arg.Value, arg.Bitmap)
 	return err
 }
