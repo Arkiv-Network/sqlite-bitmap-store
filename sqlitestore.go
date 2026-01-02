@@ -504,3 +504,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 	return nil
 }
+
+func (s *SQLiteStore) NewQueries() *store.Queries {
+	return store.New(s.readPool)
+}

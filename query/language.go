@@ -204,7 +204,7 @@ func (e *Glob) Evaluate(
 	q store.Queries,
 ) (_ *roaring64.Bitmap, err error) {
 
-	bitmap := roaring64.New()
+	bm := roaring64.New()
 
 	var bitmaps []*store.Bitmap
 
@@ -227,10 +227,10 @@ func (e *Glob) Evaluate(
 	}
 
 	for _, bitmap := range bitmaps {
-		bitmap.Or(bitmap.Bitmap)
+		bm.Or(bitmap.Bitmap)
 	}
 
-	return bitmap, nil
+	return bm, nil
 }
 
 type LessThan struct {
@@ -263,13 +263,13 @@ func (e *LessThan) Evaluate(
 		}
 	}
 
-	bitmap := roaring64.New()
+	bm := roaring64.New()
 
 	for _, bitmap := range bitmaps {
-		bitmap.Or(bitmap.Bitmap)
+		bm.Or(bitmap.Bitmap)
 	}
 
-	return bitmap, nil
+	return bm, nil
 }
 
 type LessOrEqualThan struct {
@@ -302,13 +302,13 @@ func (e *LessOrEqualThan) Evaluate(
 		}
 	}
 
-	bitmap := roaring64.New()
+	bm := roaring64.New()
 
 	for _, bitmap := range bitmaps {
-		bitmap.Or(bitmap.Bitmap)
+		bm.Or(bitmap.Bitmap)
 	}
 
-	return bitmap, nil
+	return bm, nil
 }
 
 type GreaterThan struct {
@@ -342,13 +342,13 @@ func (e *GreaterThan) Evaluate(
 		}
 	}
 
-	bitmap := roaring64.New()
+	bm := roaring64.New()
 
 	for _, bitmap := range bitmaps {
-		bitmap.Or(bitmap.Bitmap)
+		bm.Or(bitmap.Bitmap)
 	}
 
-	return bitmap, nil
+	return bm, nil
 }
 
 type GreaterOrEqualThan struct {
@@ -382,13 +382,13 @@ func (e *GreaterOrEqualThan) Evaluate(
 		}
 	}
 
-	bitmap := roaring64.New()
+	bm := roaring64.New()
 
 	for _, bitmap := range bitmaps {
-		bitmap.Or(bitmap.Bitmap)
+		bm.Or(bitmap.Bitmap)
 	}
 
-	return bitmap, nil
+	return bm, nil
 }
 
 // Equality represents a simple equality (e.g. name = 123).
@@ -416,16 +416,16 @@ func (e *Equality) Evaluate(
 				return nil, err
 			}
 
-			bitmap := roaring64.New()
+			bm := roaring64.New()
 
 			for _, bitmap := range bitmaps {
-				bitmap.Or(bitmap.Bitmap)
+				bm.Or(bitmap.Bitmap)
 			}
 
-			return bitmap, nil
+			return bm, nil
 
 		} else {
-			bitmap, err := q.EvaluateStringAttributeValueEqual(ctx, store.EvaluateStringAttributeValueEqualParams{
+			bm, err := q.EvaluateStringAttributeValueEqual(ctx, store.EvaluateStringAttributeValueEqualParams{
 				Name:  e.Var,
 				Value: *e.Value.String,
 			})
@@ -433,7 +433,7 @@ func (e *Equality) Evaluate(
 				return nil, err
 			}
 
-			return bitmap.Bitmap, nil
+			return bm.Bitmap, nil
 		}
 	} else {
 		if e.IsNot {
@@ -447,12 +447,12 @@ func (e *Equality) Evaluate(
 				return nil, err
 			}
 
-			bitmap := roaring64.New()
+			bm := roaring64.New()
 			for _, bitmap := range bitmaps {
-				bitmap.Or(bitmap.Bitmap)
+				bm.Or(bitmap.Bitmap)
 			}
 
-			return bitmap, nil
+			return bm, nil
 		} else {
 			bitmap, err := q.EvaluateNumericAttributeValueEqual(ctx, store.EvaluateNumericAttributeValueEqualParams{
 				Name:  e.Var,
@@ -501,11 +501,11 @@ func (e *Inclusion) Evaluate(
 				return nil, err
 			}
 		}
-		bitmap := roaring64.New()
+		bm := roaring64.New()
 		for _, bitmap := range bitmaps {
-			bitmap.Or(bitmap.Bitmap)
+			bm.Or(bitmap.Bitmap)
 		}
-		return bitmap, nil
+		return bm, nil
 
 	} else {
 		var bitmaps []*store.Bitmap
@@ -527,11 +527,11 @@ func (e *Inclusion) Evaluate(
 				return nil, err
 			}
 		}
-		bitmap := roaring64.New()
+		bm := roaring64.New()
 		for _, bitmap := range bitmaps {
-			bitmap.Or(bitmap.Bitmap)
+			bm.Or(bitmap.Bitmap)
 		}
-		return bitmap, nil
+		return bm, nil
 	}
 
 }

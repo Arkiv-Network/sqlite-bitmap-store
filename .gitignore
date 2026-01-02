@@ -46,3 +46,4 @@ output/
 ./rootcause
 
 !.claude/settings.local.json
+arkiv-data.db*
