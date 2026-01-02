@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/arkiv-network/sqlite-bitmap-store/store"
+	"github.com/Arkiv-Network/sqlite-bitmap-store/store"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/sqlite3"

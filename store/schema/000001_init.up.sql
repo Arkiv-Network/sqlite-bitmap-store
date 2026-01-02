@@ -1,6 +1,7 @@
+
 CREATE TABLE payloads (
-    entity_key BLOB NOT NULL,
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entity_key BLOB NOT NULL,
     payload BLOB NOT NULL,
     content_type TEXT NOT NULL DEFAULT '',
     string_attributes TEXT NOT NULL DEFAULT '{}',
@@ -22,7 +23,7 @@ CREATE TABLE STRING_ATTRIBUTES_VALUES_BITMAPS (
     value TEXT NOT NULL,
     bitmap BLOB,
     PRIMARY KEY (name, value)
-)
+);
 
 
 CREATE TABLE NUMERIC_ATTRIBUTES_VALUES_BITMAPS (
@@ -30,5 +31,6 @@ CREATE TABLE NUMERIC_ATTRIBUTES_VALUES_BITMAPS (
     value INTEGER NOT NULL,
     bitmap BLOB,
     PRIMARY KEY (name, value)
-)
+);
+
 

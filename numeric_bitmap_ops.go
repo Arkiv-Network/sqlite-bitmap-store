@@ -2,10 +2,11 @@ package sqlitebitmapstore
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
+	"github.com/Arkiv-Network/sqlite-bitmap-store/store"
 	"github.com/RoaringBitmap/roaring/roaring64"
-	"github.com/arkiv-network/sqlite-bitmap-store/store"
 )
 
 type numericBitmapOps struct {
@@ -24,15 +25,17 @@ func (o *numericBitmapOps) Add(ctx context.Context, name string, value uint64, i
 			Value: value,
 		},
 	)
-	if err != nil {
+	if err != nil && err != sql.ErrNoRows {
 		return fmt.Errorf("failed to get numeric attribute %q value %q bitmap: %w", name, value, err)
 	}
 
 	bm := roaring64.New()
 
-	err = bm.UnmarshalBinary(bitmap)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal numeric attribute %q value %s bitmap: %w", name, value, err)
+	if len(bitmap) > 0 {
+		err = bm.UnmarshalBinary(bitmap)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal numeric attribute %q value %d bitmap: %w", name, value, err)
+		}
 	}
 
 	bm.Add(id)
@@ -65,15 +68,17 @@ func (o *numericBitmapOps) Remove(ctx context.Context, name string, value uint64
 			Value: value,
 		},
 	)
-	if err != nil {
+	if err != nil && err != sql.ErrNoRows {
 		return fmt.Errorf("failed to get numeric attribute %q value %d bitmap: %w", name, value, err)
 	}
 
 	bm := roaring64.New()
 
-	err = bm.UnmarshalBinary(bitmap)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal numeric attribute %q value %d bitmap: %w", name, value, err)
+	if len(bitmap) > 0 {
+		err = bm.UnmarshalBinary(bitmap)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal numeric attribute %q value %d bitmap: %w", name, value, err)
+		}
 	}
 
 	bm.Remove(id)
