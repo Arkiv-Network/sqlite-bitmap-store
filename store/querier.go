@@ -9,6 +9,7 @@ import (
 )
 
 type Querier interface {
+	GetAttributeValueBitmap(ctx context.Context, arg GetAttributeValueBitmapParams) ([]byte, error)
 	InsertPayload(ctx context.Context, arg InsertPayloadParams) error
 	UpsertAttributeValueBitmap(ctx context.Context, arg UpsertAttributeValueBitmapParams) error
 }

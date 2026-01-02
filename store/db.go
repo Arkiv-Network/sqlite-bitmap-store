@@ -24,6 +24,9 @@ func New(db DBTX) *Queries {
 func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	q := Queries{db: db}
 	var err error
+	if q.getAttributeValueBitmapStmt, err = db.PrepareContext(ctx, getAttributeValueBitmap); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAttributeValueBitmap: %w", err)
+	}
 	if q.insertPayloadStmt, err = db.PrepareContext(ctx, insertPayload); err != nil {
 		return nil, fmt.Errorf("error preparing query InsertPayload: %w", err)
 	}
@@ -35,6 +38,11 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 
 func (q *Queries) Close() error {
 	var err error
+	if q.getAttributeValueBitmapStmt != nil {
+		if cerr := q.getAttributeValueBitmapStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAttributeValueBitmapStmt: %w", cerr)
+		}
+	}
 	if q.insertPayloadStmt != nil {
 		if cerr := q.insertPayloadStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing insertPayloadStmt: %w", cerr)
@@ -84,6 +92,7 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 type Queries struct {
 	db                             DBTX
 	tx                             *sql.Tx
+	getAttributeValueBitmapStmt    *sql.Stmt
 	insertPayloadStmt              *sql.Stmt
 	upsertAttributeValueBitmapStmt *sql.Stmt
 }
@@ -92,6 +101,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
 		db:                             tx,
 		tx:                             tx,
+		getAttributeValueBitmapStmt:    q.getAttributeValueBitmapStmt,
 		insertPayloadStmt:              q.insertPayloadStmt,
 		upsertAttributeValueBitmapStmt: q.upsertAttributeValueBitmapStmt,
 	}

@@ -12,3 +12,7 @@ INSERT INTO ATTRIBUTES_VALUES_BITMAPS (name, value, type, bitmap)
 VALUES (?, ?, ?, ?)
 ON CONFLICT (name, value, type) DO UPDATE SET bitmap = excluded.bitmap;
 
+-- name: GetAttributeValueBitmap :one
+SELECT bitmap FROM ATTRIBUTES_VALUES_BITMAPS
+WHERE name = ? AND value = ? AND type = ?;
+

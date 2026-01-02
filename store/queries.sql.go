@@ -9,6 +9,24 @@ import (
 	"context"
 )
 
+const getAttributeValueBitmap = `-- name: GetAttributeValueBitmap :one
+SELECT bitmap FROM ATTRIBUTES_VALUES_BITMAPS
+WHERE name = ? AND value = ? AND type = ?
+`
+
+type GetAttributeValueBitmapParams struct {
+	Name  string
+	Value string
+	Type  string
+}
+
+func (q *Queries) GetAttributeValueBitmap(ctx context.Context, arg GetAttributeValueBitmapParams) ([]byte, error) {
+	row := q.queryRow(ctx, q.getAttributeValueBitmapStmt, getAttributeValueBitmap, arg.Name, arg.Value, arg.Type)
+	var bitmap []byte
+	err := row.Scan(&bitmap)
+	return bitmap, err
+}
+
 const insertPayload = `-- name: InsertPayload :exec
 INSERT INTO payloads (
     id,
