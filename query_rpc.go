@@ -217,9 +217,6 @@ func toPayload(r store.RetrievePayloadsRow, includeData IncludeData) *EntityData
 
 	// TODO fix splitting of synthetic from organic attributes
 	if includeData.Attributes || includeData.SyntheticAttributes {
-		fmt.Println("includeData.Attributes || includeData.SyntheticAttributes", includeData.Attributes, includeData.SyntheticAttributes)
-		fmt.Println("r.StringAttributes", r.StringAttributes)
-		fmt.Println("r.NumericAttributes", r.NumericAttributes)
 
 		res.StringAttributes = make([]StringAttribute, 0)
 		for k, v := range r.StringAttributes.Values {
