@@ -66,6 +66,7 @@ type QueryResponse struct {
 	Data        []json.RawMessage `json:"data"`
 	BlockNumber uint64            `json:"blockNumber"`
 	Cursor      *string           `json:"cursor,omitempty"`
+	TotalCount  uint64            `json:"totalCount"`
 }
 
 type EntityData struct {
@@ -120,6 +121,8 @@ func (s *SQLiteStore) QueryEntities(
 		ctx,
 		queries,
 	)
+
+	res.TotalCount = bitmap.GetCardinality()
 
 	if err != nil {
 		return nil, fmt.Errorf("error evaluating query: %w", err)
