@@ -39,6 +39,8 @@ func (b *Bitmap) Value() (driver.Value, error) {
 		return nil, nil
 	}
 
+	b.Bitmap.RunOptimize()
+
 	buf := new(bytes.Buffer)
 	_, err := b.Bitmap.WriteTo(buf)
 	if err != nil {
