@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Arkiv-Network/sqlite-bitmap-store/store"
-	"github.com/RoaringBitmap/roaring/roaring64"
+	"github.com/RoaringBitmap/roaring/v2/roaring64"
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
 )
