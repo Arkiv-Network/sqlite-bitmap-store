@@ -32,31 +32,22 @@ func (c Column) Compare(other Column) int {
 	return cmp.Compare(c.Name, other.Name)
 }
 
-type OrderBy struct {
-	Column     Column
-	Descending bool
-}
-
 type QueryOptions struct {
-	AtBlock            uint64
-	IncludeData        *IncludeData
-	Columns            []Column
-	OrderBy            []OrderBy
-	OrderByAnnotations []OrderByAnnotation
-	Cursor             []CursorValue
+	AtBlock     uint64
+	IncludeData *IncludeData
+	Columns     []Column
+	Cursor      []CursorValue
 
 	// Cache the sorted list of unique columns to fetch
 	allColumnsSorted []string
-	orderByColumns   []OrderBy
 
 	Log *slog.Logger
 }
 
 func NewQueryOptions(log *slog.Logger, latestHead uint64, options *InternalQueryOptions) (*QueryOptions, error) {
 	queryOptions := QueryOptions{
-		Log:                log,
-		OrderByAnnotations: options.OrderBy,
-		IncludeData:        options.IncludeData,
+		Log:         log,
+		IncludeData: options.IncludeData,
 	}
 
 	queryOptions.Columns = []Column{}
@@ -95,14 +86,6 @@ func NewQueryOptions(log *slog.Logger, latestHead uint64, options *InternalQuery
 		})
 	}
 
-	for i := range options.OrderBy {
-		name := fmt.Sprintf("arkiv_annotation_sorting%d_value", i)
-		queryOptions.Columns = append(queryOptions.Columns, Column{
-			Name:          name,
-			QualifiedName: fmt.Sprintf("arkiv_annotation_sorting%d.value", i),
-		})
-	}
-
 	if options.IncludeData.Owner {
 		queryOptions.Columns = append(queryOptions.Columns, Column{
 			Name:          "owner",
@@ -132,31 +115,6 @@ func NewQueryOptions(log *slog.Logger, latestHead uint64, options *InternalQuery
 
 	// Sort so that we can use binary search later
 	slices.SortFunc(queryOptions.Columns, Column.Compare)
-
-	queryOptions.OrderBy = []OrderBy{}
-
-	for i, o := range queryOptions.OrderByAnnotations {
-		queryOptions.OrderBy = append(queryOptions.OrderBy, OrderBy{
-			Column: Column{
-				Name:          fmt.Sprintf("arkiv_annotation_sorting%d_value", i),
-				QualifiedName: fmt.Sprintf("arkiv_annotation_sorting%d.value", i),
-			},
-			Descending: o.Descending,
-		})
-	}
-	queryOptions.OrderBy = append(queryOptions.OrderBy, OrderBy{
-		Column: Column{
-			Name:          "from_block",
-			QualifiedName: "e.from_block",
-		},
-	})
-	queryOptions.OrderBy = append(queryOptions.OrderBy, OrderBy{
-		Column: Column{
-			Name:          "entity_key",
-			QualifiedName: "e.entity_key",
-			IsBytes:       true,
-		},
-	})
 
 	queryOptions.AtBlock = latestHead
 
