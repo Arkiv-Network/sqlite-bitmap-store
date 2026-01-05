@@ -63,7 +63,15 @@ func main() {
 			r, err := st.QueryEntities(
 				context.Background(),
 				queryString,
-				nil,
+				// nil,
+				&sqlitestore.Options{
+					IncludeData: &sqlitestore.IncludeData{
+						Key:         true,
+						ContentType: true,
+						Payload:     true,
+						Attributes:  true,
+					},
+				},
 			)
 
 			duration := time.Since(startTime)

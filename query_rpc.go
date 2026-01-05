@@ -28,7 +28,7 @@ type IncludeData struct {
 type Options struct {
 	AtBlock        *uint64      `json:"atBlock"`
 	IncludeData    *IncludeData `json:"includeData"`
-	ResultsPerPage uint64       `json:"resultsPerPage"`
+	ResultsPerPage *uint64      `json:"resultsPerPage"`
 	Cursor         string       `json:"cursor"`
 }
 
@@ -48,11 +48,16 @@ func (o *Options) GetResultsPerPage() uint64 {
 	if o == nil {
 		return 200
 	}
-	return o.ResultsPerPage
+
+	if o.ResultsPerPage == nil {
+		return 200
+	}
+
+	return *o.ResultsPerPage
 }
 
 func (o *Options) GetIncludeData() IncludeData {
-	if o == nil || o.IncludeData != nil {
+	if o == nil || o.IncludeData == nil {
 		return IncludeData{
 			Key:         true,
 			ContentType: true,
@@ -64,9 +69,9 @@ func (o *Options) GetIncludeData() IncludeData {
 
 type QueryResponse struct {
 	Data        []json.RawMessage `json:"data"`
-	BlockNumber uint64            `json:"blockNumber"`
+	BlockNumber hexutil.Uint64    `json:"blockNumber"`
 	Cursor      *string           `json:"cursor,omitempty"`
-	TotalCount  uint64            `json:"totalCount"`
+	TotalCount  hexutil.Uint64    `json:"totalCount"`
 }
 
 type EntityData struct {
@@ -102,7 +107,7 @@ func (s *SQLiteStore) QueryEntities(
 	options *Options,
 ) (*QueryResponse, error) {
 
-	// TOOD: wait for the block height
+	// TODO: wait for the block height
 
 	res := &QueryResponse{
 		Data:        []json.RawMessage{},
@@ -121,12 +126,11 @@ func (s *SQLiteStore) QueryEntities(
 		ctx,
 		queries,
 	)
-
-	res.TotalCount = bitmap.GetCardinality()
-
 	if err != nil {
 		return nil, fmt.Errorf("error evaluating query: %w", err)
 	}
+
+	res.TotalCount = hexutil.Uint64(bitmap.GetCardinality())
 
 	it := bitmap.ReverseIterator()
 
@@ -211,14 +215,15 @@ func toPayload(r store.RetrievePayloadsRow, includeData IncludeData) *EntityData
 		res.ContentType = &r.ContentType
 	}
 
-	// TOD fix splitting of synthetic from organic attributes
+	// TODO fix splitting of synthetic from organic attributes
 	if includeData.Attributes || includeData.SyntheticAttributes {
+		fmt.Println("includeData.Attributes || includeData.SyntheticAttributes", includeData.Attributes, includeData.SyntheticAttributes)
+		fmt.Println("r.StringAttributes", r.StringAttributes)
+		fmt.Println("r.NumericAttributes", r.NumericAttributes)
 
 		res.StringAttributes = make([]StringAttribute, 0)
-		if includeData.Attributes {
-			for k, v := range r.StringAttributes.Values {
-				res.StringAttributes = append(res.StringAttributes, StringAttribute{Key: k, Value: v})
-			}
+		for k, v := range r.StringAttributes.Values {
+			res.StringAttributes = append(res.StringAttributes, StringAttribute{Key: k, Value: v})
 		}
 
 		res.NumericAttributes = make([]NumericAttribute, 0)

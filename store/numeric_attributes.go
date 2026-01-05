@@ -25,12 +25,18 @@ func (b *NumericAttributes) Scan(src any) error {
 		return nil
 	}
 
-	data, ok := src.(string)
-	if !ok {
-		return fmt.Errorf("expected string, got %T", src)
+	var data []byte
+
+	switch v := src.(type) {
+	case string:
+		data = []byte(v)
+	case []byte:
+		data = v
+	default:
+		return fmt.Errorf("expected string or []byte, got %T", src)
 	}
 
-	err := json.Unmarshal([]byte(data), &b)
+	err := json.Unmarshal(data, &b)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal string attributes: %w", err)
 	}
