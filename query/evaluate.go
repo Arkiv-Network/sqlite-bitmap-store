@@ -2,6 +2,7 @@ package query
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
 	"github.com/Arkiv-Network/sqlite-bitmap-store/store"
@@ -291,6 +292,11 @@ func (e *Equality) Evaluate(
 				Name:  e.Var,
 				Value: *e.Value.String,
 			})
+
+			if err == sql.ErrNoRows {
+				return roaring64.New(), nil
+			}
+
 			if err != nil {
 				return nil, err
 			}
@@ -320,6 +326,11 @@ func (e *Equality) Evaluate(
 				Name:  e.Var,
 				Value: *e.Value.Number,
 			})
+
+			if err == sql.ErrNoRows {
+				return roaring64.New(), nil
+			}
+
 			if err != nil {
 				return nil, err
 			}
