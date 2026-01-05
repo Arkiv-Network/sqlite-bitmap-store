@@ -76,39 +76,3 @@ type Options struct {
 	ResultsPerPage uint64       `json:"resultsPerPage"`
 	Cursor         string       `json:"cursor"`
 }
-
-func (options *Options) ToInternalQueryOptions() (*InternalQueryOptions, error) {
-	defaultIncludeData := &IncludeData{
-		Key:         true,
-		Expiration:  true,
-		Owner:       true,
-		Payload:     true,
-		ContentType: true,
-		Attributes:  true,
-	}
-	switch {
-	case options == nil:
-		return &InternalQueryOptions{
-			IncludeData: defaultIncludeData,
-		}, nil
-	case options.IncludeData == nil:
-		return &InternalQueryOptions{
-			IncludeData: defaultIncludeData,
-			AtBlock:     options.AtBlock,
-			Cursor:      options.Cursor,
-		}, nil
-	default:
-		iq := InternalQueryOptions{
-			AtBlock:     options.AtBlock,
-			Cursor:      options.Cursor,
-			IncludeData: options.IncludeData,
-		}
-		return &iq, nil
-	}
-}
-
-type InternalQueryOptions struct {
-	AtBlock     *uint64      `json:"atBlock"`
-	IncludeData *IncludeData `json:"includeData"`
-	Cursor      string       `json:"cursor"`
-}
