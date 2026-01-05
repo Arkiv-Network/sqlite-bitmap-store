@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/Arkiv-Network/sqlite-bitmap-store/query"
+	"github.com/Arkiv-Network/sqlite-bitmap-store/store"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
@@ -31,12 +32,34 @@ type Options struct {
 	Cursor         string       `json:"cursor"`
 }
 
-func (o Options) GetAtBlock() uint64 {
+func (o *Options) GetAtBlock() uint64 {
+
+	if o == nil {
+		return 0
+	}
+
 	if o.AtBlock != nil {
 		return *o.AtBlock
 	}
 	return 0
+}
 
+func (o *Options) GetResultsPerPage() uint64 {
+	if o == nil {
+		return 200
+	}
+	return o.ResultsPerPage
+}
+
+func (o *Options) GetIncludeData() IncludeData {
+	if o == nil || o.IncludeData != nil {
+		return IncludeData{
+			Key:         true,
+			ContentType: true,
+			Payload:     true,
+		}
+	}
+	return *o.IncludeData
 }
 
 type QueryResponse struct {
@@ -56,16 +79,16 @@ type EntityData struct {
 	TransactionIndexInBlock     *uint64         `json:"transactionIndexInBlock,omitempty"`
 	OperationIndexInTransaction *uint64         `json:"operationIndexInTransaction,omitempty"`
 
-	StringAttributes  []StringAnnotation  `json:"stringAttributes,omitempty"`
-	NumericAttributes []NumericAnnotation `json:"numericAttributes,omitempty"`
+	StringAttributes  []StringAttribute  `json:"stringAttributes,omitempty"`
+	NumericAttributes []NumericAttribute `json:"numericAttributes,omitempty"`
 }
 
-type StringAnnotation struct {
+type StringAttribute struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 }
 
-type NumericAnnotation struct {
+type NumericAttribute struct {
 	Key   string `json:"key"`
 	Value uint64 `json:"value"`
 }
@@ -104,57 +127,103 @@ func (s *SQLiteStore) QueryEntities(
 
 	it := bitmap.ReverseIterator()
 
-	maxResults := options.ResultsPerPage
-
-	if maxResults == 0 {
-		maxResults = 200
-	}
+	maxResults := options.GetResultsPerPage()
 
 	nextIDs := func(max uint64) []uint64 {
 		ids := []uint64{}
-		for i := uint64(0); i < max; i++ {
+		for range max {
 			if !it.HasNext() {
 				break
 			}
+			ids = append(ids, it.Next())
 		}
 		return ids
 	}
 
-	// totalBytes := uint64(0)
+	totalBytes := uint64(0)
 
+	finished := true
+
+	var lastID *uint64
+
+fillLoop:
 	for it.HasNext() {
 
 		nextBatchSize := min(maxResults-uint64(len(res.Data)), 10)
 
 		nextIDs := nextIDs(nextBatchSize)
 
-		_, err := queries.RetrievePayloads(ctx, nextIDs)
+		payloads, err := queries.RetrievePayloads(ctx, nextIDs)
 		if err != nil {
 			return nil, fmt.Errorf("error retrieving payloads: %w", err)
 		}
 
-		// for _, payload := range payloads {
+		for _, payload := range payloads {
 
-		// 	// ed :=
+			lastID = &payload.ID
 
-		// }
+			ed := toPayload(payload, options.GetIncludeData())
+			d, err := json.Marshal(ed)
+			if err != nil {
+				return nil, fmt.Errorf("error marshalling entity data: %w", err)
+			}
+			res.Data = append(res.Data, d)
+			totalBytes += uint64(len(d))
 
+			if totalBytes > maxResultBytes {
+				finished = false
+				break fillLoop
+			}
+
+			if uint64(len(res.Data)) >= maxResults {
+				finished = false
+				break fillLoop
+			}
+
+		}
+
+	}
+
+	if !finished {
+		res.Cursor = pointerOf(fmt.Sprintf("0x%x", *lastID))
 	}
 
 	return res, nil
 
 }
+func pointerOf[T any](v T) *T {
+	return &v
+}
 
-// func toPayload(r RetrievePayloadsRow, includeData *IncludeData) *query.EntityData {
-// 	return &query.EntityData{
-// 		Key:                         r.EntityKey,
-// 		Value:                       r.Payload,
-// 		ContentType:                 r.ContentType,
-// 		ExpiresAt:                   r.ExpiresAt,
-// 		Owner:                       r.Owner,
-// 		CreatedAtBlock:              r.CreatedAtBlock,
-// 		LastModifiedAtBlock:         r.LastModifiedAtBlock,
-// 		TransactionIndexInBlock:     r.TransactionIndexInBlock,
-// 		OperationIndexInTransaction: r.OperationIndexInTransaction,
-// 	}
-// }
+func toPayload(r store.RetrievePayloadsRow, includeData IncludeData) *EntityData {
+	res := &EntityData{}
+	if includeData.Key {
+		res.Key = pointerOf(common.BytesToHash(r.EntityKey))
+	}
+	if includeData.Payload {
+		res.Value = r.Payload
+	}
+
+	if includeData.ContentType {
+		res.ContentType = &r.ContentType
+	}
+
+	// TOD fix splitting of synthetic from organic attributes
+	if includeData.Attributes || includeData.SyntheticAttributes {
+
+		res.StringAttributes = make([]StringAttribute, 0)
+		if includeData.Attributes {
+			for k, v := range r.StringAttributes.Values {
+				res.StringAttributes = append(res.StringAttributes, StringAttribute{Key: k, Value: v})
+			}
+		}
+
+		res.NumericAttributes = make([]NumericAttribute, 0)
+		for k, v := range r.NumericAttributes.Values {
+			res.NumericAttributes = append(res.NumericAttributes, NumericAttribute{Key: k, Value: v})
+		}
+	}
+
+	return res
+
+}

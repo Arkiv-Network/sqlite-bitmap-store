@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"log/slog"
@@ -9,7 +10,6 @@ import (
 	"time"
 
 	sqlitestore "github.com/Arkiv-Network/sqlite-bitmap-store"
-	"github.com/Arkiv-Network/sqlite-bitmap-store/query"
 	"github.com/urfave/cli/v2"
 )
 
@@ -46,20 +46,37 @@ func main() {
 			}
 			defer st.Close()
 
-			q, err := query.Parse(queryString)
-			if err != nil {
-				return fmt.Errorf("failed to parse query: %w", err)
-			}
+			// q, err := query.Parse(queryString)
+			// if err != nil {
+			// 	return fmt.Errorf("failed to parse query: %w", err)
+			// }
 
 			startTime := time.Now()
 
-			bitmap, err := q.Evaluate(context.Background(), st.NewQueries())
+			// bitmap, err := q.Evaluate(context.Background(), st.NewQueries())
+			// if err != nil {
+			// 	return fmt.Errorf("failed to evaluate query: %w", err)
+			// }
+
+			// fmt.Println(bitmap.GetCardinality())
+
+			r, err := st.QueryEntities(
+				context.Background(),
+				queryString,
+				nil,
+			)
+
+			duration := time.Since(startTime)
+
 			if err != nil {
-				return fmt.Errorf("failed to evaluate query: %w", err)
+				return fmt.Errorf("failed to query entities: %w", err)
 			}
 
-			fmt.Println(bitmap.GetCardinality())
-			fmt.Println(time.Since(startTime))
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			enc.Encode(r)
+
+			fmt.Fprintf(os.Stderr, "Query time: %s\n", duration)
 
 			return nil
 

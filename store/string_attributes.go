@@ -24,12 +24,12 @@ func (b *StringAttributes) Scan(src any) error {
 		return nil
 	}
 
-	data, ok := src.([]byte)
+	data, ok := src.(string)
 	if !ok {
-		return fmt.Errorf("expected []byte, got %T", src)
+		return fmt.Errorf("expected string, got %T", src)
 	}
 
-	err := json.Unmarshal(data, &b)
+	err := json.Unmarshal([]byte(data), &b)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal string attributes: %w", err)
 	}
