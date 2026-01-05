@@ -17,9 +17,11 @@ sql:
           - column: "payloads.string_attributes"
             go_type: 
               type: "StringAttributes"
+              pointer: true
           - column: "payloads.numeric_attributes"
             go_type: 
               type: "NumericAttributes"
+              pointer: true
           - column: "numeric_attributes_values_bitmaps.value"
             go_type: "uint64"
           - column: "string_attributes_values_bitmaps.bitmap"

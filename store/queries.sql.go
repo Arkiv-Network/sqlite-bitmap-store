@@ -88,8 +88,8 @@ type GetPayloadForEntityKeyRow struct {
 	ID                uint64
 	Payload           []byte
 	ContentType       string
-	StringAttributes  StringAttributes
-	NumericAttributes NumericAttributes
+	StringAttributes  *StringAttributes
+	NumericAttributes *NumericAttributes
 }
 
 func (q *Queries) GetPayloadForEntityKey(ctx context.Context, entityKey []byte) (GetPayloadForEntityKeyRow, error) {
@@ -171,8 +171,8 @@ type UpsertPayloadParams struct {
 	EntityKey         []byte
 	Payload           []byte
 	ContentType       string
-	StringAttributes  StringAttributes
-	NumericAttributes NumericAttributes
+	StringAttributes  *StringAttributes
+	NumericAttributes *NumericAttributes
 }
 
 func (q *Queries) UpsertPayload(ctx context.Context, arg UpsertPayloadParams) (uint64, error) {

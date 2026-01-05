@@ -6,10 +6,20 @@ import (
 	"fmt"
 )
 
-type StringAttributes map[string]string
+type StringAttributes struct {
+	Values map[string]string
+}
+
+func NewStringAttributes(values map[string]string) *StringAttributes {
+	return &StringAttributes{Values: values}
+}
 
 // Scanner interface for reading from DB
-func (b StringAttributes) Scan(src any) error {
+func (b *StringAttributes) Scan(src any) error {
+	if b.Values == nil {
+		b.Values = make(map[string]string)
+	}
+
 	if src == nil {
 		return nil
 	}
@@ -28,7 +38,7 @@ func (b StringAttributes) Scan(src any) error {
 }
 
 // Valuer interface for writing to DB
-func (b StringAttributes) Value() (driver.Value, error) {
+func (b *StringAttributes) Value() (driver.Value, error) {
 	if b == nil {
 		return nil, nil
 	}

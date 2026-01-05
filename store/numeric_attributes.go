@@ -6,10 +6,21 @@ import (
 	"fmt"
 )
 
-type NumericAttributes map[string]uint64
+type NumericAttributes struct {
+	Values map[string]uint64
+}
+
+func NewNumericAttributes(values map[string]uint64) *NumericAttributes {
+	return &NumericAttributes{Values: values}
+}
 
 // Scanner interface for reading from DB
-func (b NumericAttributes) Scan(src any) error {
+func (b *NumericAttributes) Scan(src any) error {
+
+	if b.Values == nil {
+		b.Values = make(map[string]uint64)
+	}
+
 	if src == nil {
 		return nil
 	}
@@ -28,8 +39,8 @@ func (b NumericAttributes) Scan(src any) error {
 }
 
 // Valuer interface for writing to DB
-func (b NumericAttributes) Value() (driver.Value, error) {
-	if b == nil {
+func (b *NumericAttributes) Value() (driver.Value, error) {
+	if b.Values == nil {
 		return nil, nil
 	}
 

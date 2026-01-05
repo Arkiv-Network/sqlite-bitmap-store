@@ -21,8 +21,8 @@ type RetrievePayloadsRow struct {
 	ID                uint64
 	Payload           []byte
 	ContentType       string
-	StringAttributes  StringAttributes
-	NumericAttributes NumericAttributes
+	StringAttributes  *StringAttributes
+	NumericAttributes *NumericAttributes
 }
 
 func (q *Queries) RetrievePayloads(ctx context.Context, ids []uint64) ([]RetrievePayloadsRow, error) {

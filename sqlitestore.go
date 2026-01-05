@@ -183,8 +183,8 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 								EntityKey:         operation.Create.Key.Bytes(),
 								Payload:           operation.Create.Content,
 								ContentType:       operation.Create.ContentType,
-								StringAttributes:  stringAttributes,
-								NumericAttributes: numericAttributes,
+								StringAttributes:  store.NewStringAttributes(stringAttributes),
+								NumericAttributes: store.NewNumericAttributes(numericAttributes),
 							},
 						)
 						if err != nil {
@@ -232,17 +232,17 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						stringAttributes := maps.Clone(operation.Update.StringAttributes)
 
 						stringAttributes["$owner"] = strings.ToLower(operation.Update.Owner.Hex())
-						stringAttributes["$creator"] = oldStringAttributes["$creator"]
+						stringAttributes["$creator"] = oldStringAttributes.Values["$creator"]
 						stringAttributes["$key"] = strings.ToLower(operation.Update.Key.Hex())
 
 						untilBlock := block.Number + operation.Update.BTL
 						numericAttributes := maps.Clone(operation.Update.NumericAttributes)
 						numericAttributes["$expiration"] = uint64(untilBlock)
-						numericAttributes["$createdAtBlock"] = oldNumericAttributes["$createdAtBlock"]
+						numericAttributes["$createdAtBlock"] = oldNumericAttributes.Values["$createdAtBlock"]
 
-						numericAttributes["$sequence"] = oldNumericAttributes["$sequence"]
-						numericAttributes["$txIndex"] = oldNumericAttributes["$txIndex"]
-						numericAttributes["$opIndex"] = oldNumericAttributes["$opIndex"]
+						numericAttributes["$sequence"] = oldNumericAttributes.Values["$sequence"]
+						numericAttributes["$txIndex"] = oldNumericAttributes.Values["$txIndex"]
+						numericAttributes["$opIndex"] = oldNumericAttributes.Values["$opIndex"]
 
 						id, err := st.UpsertPayload(
 							ctx,
@@ -250,8 +250,8 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 								EntityKey:         key,
 								Payload:           operation.Update.Content,
 								ContentType:       operation.Update.ContentType,
-								StringAttributes:  stringAttributes,
-								NumericAttributes: numericAttributes,
+								StringAttributes:  store.NewStringAttributes(stringAttributes),
+								NumericAttributes: store.NewNumericAttributes(numericAttributes),
 							},
 						)
 						if err != nil {
@@ -260,7 +260,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 						sbo := newStringBitmapOps(st)
 
-						for k, v := range oldStringAttributes {
+						for k, v := range oldStringAttributes.Values {
 							err = sbo.Remove(ctx, k, v, id)
 							if err != nil {
 								return fmt.Errorf("failed to remove string attribute value bitmap: %w", err)
@@ -269,7 +269,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 						nbo := newNumericBitmapOps(st)
 
-						for k, v := range oldNumericAttributes {
+						for k, v := range oldNumericAttributes.Values {
 							err = nbo.Remove(ctx, k, v, id)
 							if err != nil {
 								return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
@@ -313,7 +313,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 						sbo := newStringBitmapOps(st)
 
-						for k, v := range oldStringAttributes {
+						for k, v := range oldStringAttributes.Values {
 							err = sbo.Remove(ctx, k, v, latestPayload.ID)
 							if err != nil {
 								return fmt.Errorf("failed to remove string attribute value bitmap: %w", err)
@@ -322,7 +322,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 						nbo := newNumericBitmapOps(st)
 
-						for k, v := range oldNumericAttributes {
+						for k, v := range oldNumericAttributes.Values {
 							err = nbo.Remove(ctx, k, v, latestPayload.ID)
 							if err != nil {
 								return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
@@ -349,17 +349,17 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 						newToBlock := block.Number + operation.ExtendBTL.BTL
 
-						numericAttributes := maps.Clone(oldNumericAttributes)
+						numericAttributes := maps.Clone(oldNumericAttributes.Values)
 						numericAttributes["$expiration"] = uint64(newToBlock)
 
-						oldExpiration := oldNumericAttributes["$expiration"]
+						oldExpiration := oldNumericAttributes.Values["$expiration"]
 
 						id, err := st.UpsertPayload(ctx, store.UpsertPayloadParams{
 							EntityKey:         key,
 							Payload:           latestPayload.Payload,
 							ContentType:       latestPayload.ContentType,
 							StringAttributes:  latestPayload.StringAttributes,
-							NumericAttributes: numericAttributes,
+							NumericAttributes: store.NewNumericAttributes(numericAttributes),
 						})
 						if err != nil {
 							return fmt.Errorf("failed to insert payload at block %d txIndex %d opIndex %d: %w", block.Number, operation.TxIndex, operation.OpIndex, err)
@@ -388,11 +388,11 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 						stringAttributes := latestPayload.StringAttributes
 
-						oldOwner := stringAttributes["$owner"]
+						oldOwner := stringAttributes.Values["$owner"]
 
 						newOwner := strings.ToLower(operation.ChangeOwner.Owner.Hex())
 
-						stringAttributes["$owner"] = newOwner
+						stringAttributes.Values["$owner"] = newOwner
 
 						id, err := st.UpsertPayload(
 							ctx,
