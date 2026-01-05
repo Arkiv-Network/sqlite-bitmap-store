@@ -7,6 +7,7 @@ import (
 
 	"github.com/Arkiv-Network/sqlite-bitmap-store/query"
 	"github.com/Arkiv-Network/sqlite-bitmap-store/store"
+	"github.com/RoaringBitmap/roaring/v2/roaring64"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
@@ -65,6 +66,19 @@ func (o *Options) GetIncludeData() IncludeData {
 		}
 	}
 	return *o.IncludeData
+}
+
+func (o *Options) GetCursor() (*uint64, error) {
+	if o == nil || o.Cursor == "" {
+		return nil, nil
+	}
+
+	cursor, err := hexutil.DecodeUint64(o.Cursor)
+	if err != nil {
+		return nil, fmt.Errorf("error decoding cursor: %w", err)
+	}
+
+	return &cursor, nil
 }
 
 type QueryResponse struct {
@@ -132,6 +146,22 @@ func (s *SQLiteStore) QueryEntities(
 
 	res.TotalCount = hexutil.Uint64(bitmap.GetCardinality())
 
+	cursor, err := options.GetCursor()
+	if err != nil {
+		return nil, fmt.Errorf("error decoding cursor: %w", err)
+	}
+
+	// The cursor contains the last value that was included in the previous page.
+	// We create a bitmask by creating an empty bitmap, and then flipping the bits
+	// from 0 to (cursor - 1) to 1, so that we only include values below the cursor
+	// value.
+	if cursor != nil {
+		s.log.Info("decoded cursor", "value", *cursor)
+		cursorMask := roaring64.New()
+		cursorMask.Flip(0, *cursor)
+		bitmap.And(cursorMask)
+	}
+
 	it := bitmap.ReverseIterator()
 
 	maxResults := options.GetResultsPerPage()
@@ -148,9 +178,7 @@ func (s *SQLiteStore) QueryEntities(
 	}
 
 	totalBytes := uint64(0)
-
 	finished := true
-
 	var lastID *uint64
 
 fillLoop:
@@ -192,12 +220,13 @@ fillLoop:
 	}
 
 	if !finished {
-		res.Cursor = pointerOf(fmt.Sprintf("0x%x", *lastID))
+		res.Cursor = pointerOf(hexutil.EncodeUint64(*lastID))
 	}
 
 	return res, nil
 
 }
+
 func pointerOf[T any](v T) *T {
 	return &v
 }
