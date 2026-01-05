@@ -12,6 +12,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
+const QueryResultCountLimit uint64 = 200
+
 type IncludeData struct {
 	Key                         bool `json:"key"`
 	Attributes                  bool `json:"attributes"`
@@ -34,26 +36,16 @@ type Options struct {
 }
 
 func (o *Options) GetAtBlock() uint64 {
-
-	if o == nil {
+	if o == nil || o.AtBlock == nil {
 		return 0
 	}
-
-	if o.AtBlock != nil {
-		return *o.AtBlock
-	}
-	return 0
+	return *o.AtBlock
 }
 
 func (o *Options) GetResultsPerPage() uint64 {
-	if o == nil {
-		return 200
+	if o == nil || o.ResultsPerPage == nil || *o.ResultsPerPage > QueryResultCountLimit {
+		return QueryResultCountLimit
 	}
-
-	if o.ResultsPerPage == nil {
-		return 200
-	}
-
 	return *o.ResultsPerPage
 }
 
