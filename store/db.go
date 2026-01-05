@@ -99,6 +99,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getStringAttributeValueBitmapStmt, err = db.PrepareContext(ctx, getStringAttributeValueBitmap); err != nil {
 		return nil, fmt.Errorf("error preparing query GetStringAttributeValueBitmap: %w", err)
 	}
+	if q.retrievePayloadsStmt, err = db.PrepareContext(ctx, retrievePayloads); err != nil {
+		return nil, fmt.Errorf("error preparing query RetrievePayloads: %w", err)
+	}
 	if q.upsertLastBlockStmt, err = db.PrepareContext(ctx, upsertLastBlock); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertLastBlock: %w", err)
 	}
@@ -241,6 +244,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getStringAttributeValueBitmapStmt: %w", cerr)
 		}
 	}
+	if q.retrievePayloadsStmt != nil {
+		if cerr := q.retrievePayloadsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing retrievePayloadsStmt: %w", cerr)
+		}
+	}
 	if q.upsertLastBlockStmt != nil {
 		if cerr := q.upsertLastBlockStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing upsertLastBlockStmt: %w", cerr)
@@ -325,6 +333,7 @@ type Queries struct {
 	getNumericAttributeValueBitmapStmt                  *sql.Stmt
 	getPayloadForEntityKeyStmt                          *sql.Stmt
 	getStringAttributeValueBitmapStmt                   *sql.Stmt
+	retrievePayloadsStmt                                *sql.Stmt
 	upsertLastBlockStmt                                 *sql.Stmt
 	upsertNumericAttributeValueBitmapStmt               *sql.Stmt
 	upsertPayloadStmt                                   *sql.Stmt
@@ -360,6 +369,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getNumericAttributeValueBitmapStmt:    q.getNumericAttributeValueBitmapStmt,
 		getPayloadForEntityKeyStmt:            q.getPayloadForEntityKeyStmt,
 		getStringAttributeValueBitmapStmt:     q.getStringAttributeValueBitmapStmt,
+		retrievePayloadsStmt:                  q.retrievePayloadsStmt,
 		upsertLastBlockStmt:                   q.upsertLastBlockStmt,
 		upsertNumericAttributeValueBitmapStmt: q.upsertNumericAttributeValueBitmapStmt,
 		upsertPayloadStmt:                     q.upsertPayloadStmt,

@@ -3,7 +3,9 @@ package sqlitebitmapstore
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
+	"github.com/Arkiv-Network/sqlite-bitmap-store/query"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
@@ -68,60 +70,91 @@ type NumericAnnotation struct {
 	Value uint64 `json:"value"`
 }
 
+const maxResultBytes = 512 * 1024 * 1024
+
 func (s *SQLiteStore) QueryEntities(
 	ctx context.Context,
 	queryStr string,
 	options *Options,
-	sqlDialect string,
 ) (*QueryResponse, error) {
-
-	return nil, nil
 
 	// TOOD: wait for the block height
 
-	// res := &QueryResponse{
-	// 	Data:        []json.RawMessage{},
-	// 	BlockNumber: 0,
-	// 	Cursor:      nil,
-	// }
+	res := &QueryResponse{
+		Data:        []json.RawMessage{},
+		BlockNumber: 0,
+		Cursor:      nil,
+	}
 
-	// q, err := query.Parse(queryStr)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("error parsing query: %w", err)
-	// }
+	q, err := query.Parse(queryStr)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing query: %w", err)
+	}
 
-	// queries := s.NewQueries()
+	queries := s.NewQueries()
 
-	// bitmap, err := q.Evaluate(
-	// 	ctx,
-	// 	queries,
-	// )
+	bitmap, err := q.Evaluate(
+		ctx,
+		queries,
+	)
 
-	// if err != nil {
-	// 	return nil, fmt.Errorf("error evaluating query: %w", err)
-	// }
+	if err != nil {
+		return nil, fmt.Errorf("error evaluating query: %w", err)
+	}
 
-	// it := bitmap.ReverseIterator()
+	it := bitmap.ReverseIterator()
 
-	// maxResults := options.ResultsPerPage
+	maxResults := options.ResultsPerPage
 
-	// if maxResults == 0 {
-	// 	maxResults = 200
-	// }
+	if maxResults == 0 {
+		maxResults = 200
+	}
 
-	// for i := uint64(0); i < maxResults; i++ {
-	// 	if !it.HasNext() {
-	// 		break
-	// 	}
-	// 	id := it.Next()
+	nextIDs := func(max uint64) []uint64 {
+		ids := []uint64{}
+		for i := uint64(0); i < max; i++ {
+			if !it.HasNext() {
+				break
+			}
+		}
+		return ids
+	}
 
-	// }
+	// totalBytes := uint64(0)
 
-	// for it.HasNext() {
-	// 	id := it.Next()
+	for it.HasNext() {
 
-	// }
+		nextBatchSize := min(maxResults-uint64(len(res.Data)), 10)
 
-	// return res, nil
+		nextIDs := nextIDs(nextBatchSize)
+
+		_, err := queries.RetrievePayloads(ctx, nextIDs)
+		if err != nil {
+			return nil, fmt.Errorf("error retrieving payloads: %w", err)
+		}
+
+		// for _, payload := range payloads {
+
+		// 	// ed :=
+
+		// }
+
+	}
+
+	return res, nil
 
 }
+
+// func toPayload(r RetrievePayloadsRow, includeData *IncludeData) *query.EntityData {
+// 	return &query.EntityData{
+// 		Key:                         r.EntityKey,
+// 		Value:                       r.Payload,
+// 		ContentType:                 r.ContentType,
+// 		ExpiresAt:                   r.ExpiresAt,
+// 		Owner:                       r.Owner,
+// 		CreatedAtBlock:              r.CreatedAtBlock,
+// 		LastModifiedAtBlock:         r.LastModifiedAtBlock,
+// 		TransactionIndexInBlock:     r.TransactionIndexInBlock,
+// 		OperationIndexInTransaction: r.OperationIndexInTransaction,
+// 	}
+// }
