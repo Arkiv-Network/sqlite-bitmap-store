@@ -49,7 +49,7 @@ type TopLevel struct {
 
 func (t *TopLevel) Evaluate(
 	ctx context.Context,
-	q store.Queries,
+	q *store.Queries,
 ) (*roaring64.Bitmap, error) {
 	return t.Expression.Evaluate(ctx, q)
 }
@@ -61,7 +61,7 @@ type Expression struct {
 
 func (e *Expression) Evaluate(
 	ctx context.Context,
-	q store.Queries,
+	q *store.Queries,
 ) (*roaring64.Bitmap, error) {
 	return e.Or.Evaluate(ctx, q)
 }
@@ -74,7 +74,7 @@ type OrExpression struct {
 
 func (e *OrExpression) Evaluate(
 	ctx context.Context,
-	q store.Queries,
+	q *store.Queries,
 ) (*roaring64.Bitmap, error) {
 	lhs, err := e.Left.Evaluate(ctx, q)
 	if err != nil {
@@ -99,7 +99,7 @@ type OrRHS struct {
 
 func (e *OrRHS) Evaluate(
 	ctx context.Context,
-	q store.Queries,
+	q *store.Queries,
 ) (*roaring64.Bitmap, error) {
 	return e.Expr.Evaluate(ctx, q)
 }
@@ -112,7 +112,7 @@ type AndExpression struct {
 
 func (e *AndExpression) Evaluate(
 	ctx context.Context,
-	q store.Queries,
+	q *store.Queries,
 ) (*roaring64.Bitmap, error) {
 	lhs, err := e.Left.Evaluate(ctx, q)
 	if err != nil {
@@ -137,7 +137,7 @@ type AndRHS struct {
 
 func (e *AndRHS) Evaluate(
 	ctx context.Context,
-	q store.Queries,
+	q *store.Queries,
 ) (*roaring64.Bitmap, error) {
 	return e.Expr.Evaluate(ctx, q)
 }
@@ -157,7 +157,7 @@ type EqualExpr struct {
 
 func (e *EqualExpr) Evaluate(
 	ctx context.Context,
-	q store.Queries,
+	q *store.Queries,
 ) (*roaring64.Bitmap, error) {
 	switch {
 	case e.Paren != nil:
@@ -188,7 +188,7 @@ type Paren struct {
 
 func (e *Paren) Evaluate(
 	ctx context.Context,
-	q store.Queries,
+	q *store.Queries,
 ) (*roaring64.Bitmap, error) {
 	return e.Nested.Evaluate(ctx, q)
 }
@@ -201,7 +201,7 @@ type Glob struct {
 
 func (e *Glob) Evaluate(
 	ctx context.Context,
-	q store.Queries,
+	q *store.Queries,
 ) (_ *roaring64.Bitmap, err error) {
 
 	bm := roaring64.New()
@@ -240,7 +240,7 @@ type LessThan struct {
 
 func (e *LessThan) Evaluate(
 	ctx context.Context,
-	q store.Queries,
+	q *store.Queries,
 ) (_ *roaring64.Bitmap, err error) {
 
 	var bitmaps []*store.Bitmap
@@ -279,7 +279,7 @@ type LessOrEqualThan struct {
 
 func (e *LessOrEqualThan) Evaluate(
 	ctx context.Context,
-	q store.Queries,
+	q *store.Queries,
 ) (_ *roaring64.Bitmap, err error) {
 
 	var bitmaps []*store.Bitmap
@@ -318,7 +318,7 @@ type GreaterThan struct {
 
 func (e *GreaterThan) Evaluate(
 	ctx context.Context,
-	q store.Queries,
+	q *store.Queries,
 ) (_ *roaring64.Bitmap, err error) {
 
 	var bitmaps []*store.Bitmap
@@ -358,7 +358,7 @@ type GreaterOrEqualThan struct {
 
 func (e *GreaterOrEqualThan) Evaluate(
 	ctx context.Context,
-	q store.Queries,
+	q *store.Queries,
 ) (_ *roaring64.Bitmap, err error) {
 
 	var bitmaps []*store.Bitmap
@@ -400,7 +400,7 @@ type Equality struct {
 
 func (e *Equality) Evaluate(
 	ctx context.Context,
-	q store.Queries,
+	q *store.Queries,
 ) (_ *roaring64.Bitmap, err error) {
 
 	if e.Value.String != nil {
@@ -476,7 +476,7 @@ type Inclusion struct {
 
 func (e *Inclusion) Evaluate(
 	ctx context.Context,
-	q store.Queries,
+	q *store.Queries,
 ) (_ *roaring64.Bitmap, err error) {
 
 	if len(e.Values.Strings) != 0 {

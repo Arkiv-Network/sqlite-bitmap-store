@@ -3,7 +3,6 @@ package sqlitebitmapstore
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -168,11 +167,6 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						stringAttributes["$creator"] = strings.ToLower(operation.Create.Owner.Hex())
 						stringAttributes["$key"] = strings.ToLower(key.Hex())
 
-						stringAttributesBytes, err := json.Marshal(stringAttributes)
-						if err != nil {
-							return fmt.Errorf("failed to marshal string attributes: %w", err)
-						}
-
 						untilBlock := block.Number + operation.Create.BTL
 						numericAttributes := maps.Clone(operation.Create.NumericAttributes)
 						numericAttributes["$expiration"] = uint64(untilBlock)
@@ -183,19 +177,14 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						numericAttributes["$txIndex"] = uint64(operation.TxIndex)
 						numericAttributes["$opIndex"] = uint64(operation.OpIndex)
 
-						numericAttributesBytes, err := json.Marshal(numericAttributes)
-						if err != nil {
-							return fmt.Errorf("failed to marshal numeric attributes: %w", err)
-						}
-
 						id, err := st.UpsertPayload(
 							ctx,
 							store.UpsertPayloadParams{
 								EntityKey:         operation.Create.Key.Bytes(),
 								Payload:           operation.Create.Content,
 								ContentType:       operation.Create.ContentType,
-								StringAttributes:  string(stringAttributesBytes),
-								NumericAttributes: string(numericAttributesBytes),
+								StringAttributes:  stringAttributes,
+								NumericAttributes: numericAttributes,
 							},
 						)
 						if err != nil {
@@ -236,29 +225,15 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 							return fmt.Errorf("failed to get latest payload: %w", err)
 						}
 
-						oldStringAttributes := map[string]string{}
+						oldStringAttributes := latestPayload.StringAttributes
 
-						err = json.Unmarshal([]byte(latestPayload.StringAttributes), &oldStringAttributes)
-						if err != nil {
-							return fmt.Errorf("failed to unmarshal string attributes: %w", err)
-						}
-
-						oldNumericAttributes := map[string]uint64{}
-						err = json.Unmarshal([]byte(latestPayload.NumericAttributes), &oldNumericAttributes)
-						if err != nil {
-							return fmt.Errorf("failed to unmarshal numeric attributes: %w", err)
-						}
+						oldNumericAttributes := latestPayload.NumericAttributes
 
 						stringAttributes := maps.Clone(operation.Update.StringAttributes)
 
 						stringAttributes["$owner"] = strings.ToLower(operation.Update.Owner.Hex())
 						stringAttributes["$creator"] = oldStringAttributes["$creator"]
 						stringAttributes["$key"] = strings.ToLower(operation.Update.Key.Hex())
-
-						stringAttributesBytes, err := json.Marshal(stringAttributes)
-						if err != nil {
-							return fmt.Errorf("failed to marshal string attributes: %w", err)
-						}
 
 						untilBlock := block.Number + operation.Update.BTL
 						numericAttributes := maps.Clone(operation.Update.NumericAttributes)
@@ -269,19 +244,14 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						numericAttributes["$txIndex"] = oldNumericAttributes["$txIndex"]
 						numericAttributes["$opIndex"] = oldNumericAttributes["$opIndex"]
 
-						numericAttributesBytes, err := json.Marshal(numericAttributes)
-						if err != nil {
-							return fmt.Errorf("failed to marshal numeric attributes: %w", err)
-						}
-
 						id, err := st.UpsertPayload(
 							ctx,
 							store.UpsertPayloadParams{
 								EntityKey:         key,
 								Payload:           operation.Update.Content,
 								ContentType:       operation.Update.ContentType,
-								StringAttributes:  string(stringAttributesBytes),
-								NumericAttributes: string(numericAttributesBytes),
+								StringAttributes:  stringAttributes,
+								NumericAttributes: numericAttributes,
 							},
 						)
 						if err != nil {
@@ -337,18 +307,9 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 							return fmt.Errorf("failed to get latest payload: %w", err)
 						}
 
-						oldStringAttributes := map[string]string{}
+						oldStringAttributes := latestPayload.StringAttributes
 
-						err = json.Unmarshal([]byte(latestPayload.StringAttributes), &oldStringAttributes)
-						if err != nil {
-							return fmt.Errorf("failed to unmarshal string attributes: %w", err)
-						}
-
-						oldNumericAttributes := map[string]uint64{}
-						err = json.Unmarshal([]byte(latestPayload.NumericAttributes), &oldNumericAttributes)
-						if err != nil {
-							return fmt.Errorf("failed to unmarshal numeric attributes: %w", err)
-						}
+						oldNumericAttributes := latestPayload.NumericAttributes
 
 						sbo := newStringBitmapOps(st)
 
@@ -384,20 +345,12 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 							return fmt.Errorf("failed to get latest payload: %w", err)
 						}
 
-						oldNumericAttributes := map[string]uint64{}
-						err = json.Unmarshal([]byte(latestPayload.NumericAttributes), &oldNumericAttributes)
-						if err != nil {
-							return fmt.Errorf("failed to unmarshal numeric attributes: %w", err)
-						}
+						oldNumericAttributes := latestPayload.NumericAttributes
 
 						newToBlock := block.Number + operation.ExtendBTL.BTL
 
 						numericAttributes := maps.Clone(oldNumericAttributes)
 						numericAttributes["$expiration"] = uint64(newToBlock)
-						numericAttributesBytes, err := json.Marshal(numericAttributes)
-						if err != nil {
-							return fmt.Errorf("failed to marshal numeric attributes: %w", err)
-						}
 
 						oldExpiration := oldNumericAttributes["$expiration"]
 
@@ -406,7 +359,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 							Payload:           latestPayload.Payload,
 							ContentType:       latestPayload.ContentType,
 							StringAttributes:  latestPayload.StringAttributes,
-							NumericAttributes: string(numericAttributesBytes),
+							NumericAttributes: numericAttributes,
 						})
 						if err != nil {
 							return fmt.Errorf("failed to insert payload at block %d txIndex %d opIndex %d: %w", block.Number, operation.TxIndex, operation.OpIndex, err)
@@ -433,21 +386,13 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 							return fmt.Errorf("failed to get latest payload: %w", err)
 						}
 
-						stringAttributes := map[string]string{}
-						err = json.Unmarshal([]byte(latestPayload.StringAttributes), &stringAttributes)
-						if err != nil {
-							return fmt.Errorf("failed to unmarshal string attributes: %w", err)
-						}
+						stringAttributes := latestPayload.StringAttributes
 
 						oldOwner := stringAttributes["$owner"]
 
 						newOwner := strings.ToLower(operation.ChangeOwner.Owner.Hex())
 
 						stringAttributes["$owner"] = newOwner
-						stringAttributesBytes, err := json.Marshal(stringAttributes)
-						if err != nil {
-							return fmt.Errorf("failed to marshal string attributes: %w", err)
-						}
 
 						id, err := st.UpsertPayload(
 							ctx,
@@ -455,7 +400,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 								EntityKey:         key,
 								Payload:           latestPayload.Payload,
 								ContentType:       latestPayload.ContentType,
-								StringAttributes:  string(stringAttributesBytes),
+								StringAttributes:  stringAttributes,
 								NumericAttributes: latestPayload.NumericAttributes,
 							},
 						)

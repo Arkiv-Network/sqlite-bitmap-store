@@ -53,7 +53,7 @@ func main() {
 
 			startTime := time.Now()
 
-			bitmap, err := q.Evaluate(context.Background(), *st.NewQueries())
+			bitmap, err := q.Evaluate(context.Background(), st.NewQueries())
 			if err != nil {
 				return fmt.Errorf("failed to evaluate query: %w", err)
 			}

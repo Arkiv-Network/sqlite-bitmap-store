@@ -20,8 +20,8 @@ type Payload struct {
 	EntityKey         []byte
 	Payload           []byte
 	ContentType       string
-	StringAttributes  string
-	NumericAttributes string
+	StringAttributes  StringAttributes
+	NumericAttributes NumericAttributes
 }
 
 type StringAttributesValuesBitmap struct {
