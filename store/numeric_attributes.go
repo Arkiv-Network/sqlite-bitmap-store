@@ -36,10 +36,12 @@ func (b *NumericAttributes) Scan(src any) error {
 		return fmt.Errorf("expected string or []byte, got %T", src)
 	}
 
-	err := json.Unmarshal(data, &b)
+	values := make(map[string]uint64)
+	err := json.Unmarshal(data, &values)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal string attributes: %w", err)
 	}
+	b.Values = values
 
 	return err
 }
