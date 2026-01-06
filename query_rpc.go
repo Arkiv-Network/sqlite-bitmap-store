@@ -274,6 +274,22 @@ func toPayload(r store.RetrievePayloadsRow, includeData IncludeData) *EntityData
 		res.NumericAttributes = filterAttributes(syntheticPredicate, r.NumericAttributes.Values)
 	}
 
+	if includeData.Expiration {
+		res.ExpiresAt = pointerOf(r.NumericAttributes.Values["$expiration"])
+	}
+
+	if includeData.Owner {
+		res.Owner = pointerOf(common.HexToAddress(r.StringAttributes.Values["$owner"]))
+	}
+
+	if includeData.CreatedAtBlock {
+		res.CreatedAtBlock = pointerOf(r.NumericAttributes.Values["$createdAtBlock"])
+	}
+
+	if includeData.LastModifiedAtBlock {
+		res.LastModifiedAtBlock = pointerOf(r.NumericAttributes.Values["$lastModifiedAtBlock"])
+	}
+
 	return res
 
 }

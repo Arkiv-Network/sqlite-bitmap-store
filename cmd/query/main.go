@@ -64,6 +64,10 @@ func main() {
 						Payload:             true,
 						Attributes:          true,
 						SyntheticAttributes: true,
+						Expiration:          true,
+						Owner:               true,
+						CreatedAtBlock:      true,
+						LastModifiedAtBlock: true,
 					},
 				},
 			)

@@ -171,6 +171,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						numericAttributes := maps.Clone(operation.Create.NumericAttributes)
 						numericAttributes["$expiration"] = uint64(untilBlock)
 						numericAttributes["$createdAtBlock"] = uint64(block.Number)
+						numericAttributes["$lastModifiedAtBlock"] = uint64(block.Number)
 
 						sequence := block.Number<<32 | operation.TxIndex<<16 | operation.OpIndex
 						numericAttributes["$sequence"] = sequence
@@ -243,6 +244,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						numericAttributes["$sequence"] = oldNumericAttributes.Values["$sequence"]
 						numericAttributes["$txIndex"] = oldNumericAttributes.Values["$txIndex"]
 						numericAttributes["$opIndex"] = oldNumericAttributes.Values["$opIndex"]
+						numericAttributes["$lastModifiedAtBlock"] = uint64(block.Number)
 
 						id, err := st.UpsertPayload(
 							ctx,
