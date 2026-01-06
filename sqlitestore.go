@@ -455,3 +455,17 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 func (s *SQLiteStore) NewQueries() *store.Queries {
 	return store.New(s.readPool)
 }
+
+func (s *SQLiteStore) ReadTransaction(ctx context.Context, fn func(q *store.Queries) error) error {
+	tx, err := s.readPool.BeginTx(ctx, &sql.TxOptions{
+		ReadOnly: true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	st := store.New(tx)
+
+	return fn(st)
+}

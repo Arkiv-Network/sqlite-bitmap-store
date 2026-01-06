@@ -123,93 +123,100 @@ func (s *SQLiteStore) QueryEntities(
 		return nil, fmt.Errorf("error parsing query: %w", err)
 	}
 
-	queries := s.NewQueries()
+	err = s.ReadTransaction(ctx, func(queries *store.Queries) error {
 
-	bitmap, err := q.Evaluate(
-		ctx,
-		queries,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("error evaluating query: %w", err)
-	}
-
-	res.TotalCount = hexutil.Uint64(bitmap.GetCardinality())
-
-	cursor, err := options.GetCursor()
-	if err != nil {
-		return nil, fmt.Errorf("error decoding cursor: %w", err)
-	}
-
-	// The cursor contains the last value that was included in the previous page.
-	// We create a bitmask by creating an empty bitmap, and then flipping the bits
-	// from 0 to (cursor - 1) to 1, so that we only include values below the cursor
-	// value.
-	if cursor != nil {
-		s.log.Info("decoded cursor", "value", *cursor)
-		cursorMask := roaring64.New()
-		cursorMask.Flip(0, *cursor)
-		bitmap.And(cursorMask)
-	}
-
-	it := bitmap.ReverseIterator()
-
-	maxResults := options.GetResultsPerPage()
-
-	nextIDs := func(max uint64) []uint64 {
-		ids := []uint64{}
-		for range max {
-			if !it.HasNext() {
-				break
-			}
-			ids = append(ids, it.Next())
-		}
-		return ids
-	}
-
-	totalBytes := uint64(0)
-	finished := true
-	var lastID *uint64
-
-fillLoop:
-	for it.HasNext() {
-
-		nextBatchSize := min(maxResults-uint64(len(res.Data)), 10)
-
-		nextIDs := nextIDs(nextBatchSize)
-
-		payloads, err := queries.RetrievePayloads(ctx, nextIDs)
+		bitmap, err := q.Evaluate(
+			ctx,
+			queries,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("error retrieving payloads: %w", err)
+			return fmt.Errorf("error evaluating query: %w", err)
 		}
 
-		for _, payload := range payloads {
+		res.TotalCount = hexutil.Uint64(bitmap.GetCardinality())
 
-			lastID = &payload.ID
+		cursor, err := options.GetCursor()
+		if err != nil {
+			return fmt.Errorf("error decoding cursor: %w", err)
+		}
 
-			ed := toPayload(payload, options.GetIncludeData())
-			d, err := json.Marshal(ed)
+		// The cursor contains the last value that was included in the previous page.
+		// We create a bitmask by creating an empty bitmap, and then flipping the bits
+		// from 0 to (cursor - 1) to 1, so that we only include values below the cursor
+		// value.
+		if cursor != nil {
+			s.log.Info("decoded cursor", "value", *cursor)
+			cursorMask := roaring64.New()
+			cursorMask.AddRange(0, *cursor)
+			bitmap.And(cursorMask)
+		}
+
+		it := bitmap.ReverseIterator()
+
+		maxResults := options.GetResultsPerPage()
+
+		nextIDs := func(max uint64) []uint64 {
+			ids := []uint64{}
+			for range max {
+				if !it.HasNext() {
+					break
+				}
+				ids = append(ids, it.Next())
+			}
+			return ids
+		}
+
+		totalBytes := uint64(0)
+		finished := true
+		var lastID *uint64
+
+	fillLoop:
+		for it.HasNext() {
+
+			nextBatchSize := min(maxResults-uint64(len(res.Data)), 10)
+
+			nextIDs := nextIDs(nextBatchSize)
+
+			payloads, err := queries.RetrievePayloads(ctx, nextIDs)
 			if err != nil {
-				return nil, fmt.Errorf("error marshalling entity data: %w", err)
-			}
-			res.Data = append(res.Data, d)
-			totalBytes += uint64(len(d))
-
-			if totalBytes > maxResultBytes {
-				finished = false
-				break fillLoop
+				return fmt.Errorf("error retrieving payloads: %w", err)
 			}
 
-			if uint64(len(res.Data)) >= maxResults {
-				finished = false
-				break fillLoop
+			for _, payload := range payloads {
+
+				lastID = &payload.ID
+
+				ed := toPayload(payload, options.GetIncludeData())
+				d, err := json.Marshal(ed)
+				if err != nil {
+					return fmt.Errorf("error marshalling entity data: %w", err)
+				}
+				res.Data = append(res.Data, d)
+				totalBytes += uint64(len(d))
+
+				if totalBytes > maxResultBytes {
+					finished = false
+					break fillLoop
+				}
+
+				if uint64(len(res.Data)) >= maxResults {
+					finished = false
+					break fillLoop
+				}
+
 			}
 
 		}
 
-	}
+		if !finished {
+			res.Cursor = pointerOf(hexutil.EncodeUint64(*lastID))
+		}
 
-	if !finished {
-		res.Cursor = pointerOf(hexutil.EncodeUint64(*lastID))
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("error peforming query: %w", err)
 	}
 
 	return res, nil
