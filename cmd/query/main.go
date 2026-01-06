@@ -53,23 +53,17 @@ func main() {
 
 			startTime := time.Now()
 
-			// bitmap, err := q.Evaluate(context.Background(), st.NewQueries())
-			// if err != nil {
-			// 	return fmt.Errorf("failed to evaluate query: %w", err)
-			// }
-
-			// fmt.Println(bitmap.GetCardinality())
-
 			r, err := st.QueryEntities(
 				context.Background(),
 				queryString,
 				// nil,
 				&sqlitestore.Options{
 					IncludeData: &sqlitestore.IncludeData{
-						Key:         true,
-						ContentType: true,
-						Payload:     true,
-						Attributes:  true,
+						Key:                 true,
+						ContentType:         true,
+						Payload:             true,
+						Attributes:          true,
+						SyntheticAttributes: true,
 					},
 				},
 			)
