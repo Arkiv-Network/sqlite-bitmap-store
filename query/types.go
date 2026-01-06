@@ -14,12 +14,6 @@ var ExpirationAttributeKey = "$expiration"
 var CreatedAtBlockKey = "$createdAtBlock"
 var SequenceAttributeKey = "$sequence"
 
-type OrderByAnnotation struct {
-	Name       string `json:"name"`
-	Type       string `json:"type"`
-	Descending bool   `json:"desc"`
-}
-
 type QueryResponse struct {
 	Data        []json.RawMessage `json:"data"`
 	BlockNumber uint64            `json:"blockNumber"`
@@ -77,48 +71,8 @@ type IncludeData struct {
 }
 
 type Options struct {
-	AtBlock        *uint64             `json:"atBlock"`
-	IncludeData    *IncludeData        `json:"includeData"`
-	OrderBy        []OrderByAnnotation `json:"orderBy"`
-	ResultsPerPage uint64              `json:"resultsPerPage"`
-	Cursor         string              `json:"cursor"`
-}
-
-func (options *Options) ToInternalQueryOptions() (*InternalQueryOptions, error) {
-	defaultIncludeData := &IncludeData{
-		Key:         true,
-		Expiration:  true,
-		Owner:       true,
-		Payload:     true,
-		ContentType: true,
-		Attributes:  true,
-	}
-	switch {
-	case options == nil:
-		return &InternalQueryOptions{
-			IncludeData: defaultIncludeData,
-		}, nil
-	case options.IncludeData == nil:
-		return &InternalQueryOptions{
-			IncludeData: defaultIncludeData,
-			OrderBy:     options.OrderBy,
-			AtBlock:     options.AtBlock,
-			Cursor:      options.Cursor,
-		}, nil
-	default:
-		iq := InternalQueryOptions{
-			OrderBy:     options.OrderBy,
-			AtBlock:     options.AtBlock,
-			Cursor:      options.Cursor,
-			IncludeData: options.IncludeData,
-		}
-		return &iq, nil
-	}
-}
-
-type InternalQueryOptions struct {
-	AtBlock     *uint64             `json:"atBlock"`
-	IncludeData *IncludeData        `json:"includeData"`
-	OrderBy     []OrderByAnnotation `json:"orderBy"`
-	Cursor      string              `json:"cursor"`
+	AtBlock        *uint64      `json:"atBlock"`
+	IncludeData    *IncludeData `json:"includeData"`
+	ResultsPerPage uint64       `json:"resultsPerPage"`
+	Cursor         string       `json:"cursor"`
 }
