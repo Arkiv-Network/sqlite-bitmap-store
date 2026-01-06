@@ -12,6 +12,7 @@ type Querier interface {
 	DeleteNumericAttributeValueBitmap(ctx context.Context, arg DeleteNumericAttributeValueBitmapParams) error
 	DeletePayloadForEntityKey(ctx context.Context, entityKey []byte) error
 	DeleteStringAttributeValueBitmap(ctx context.Context, arg DeleteStringAttributeValueBitmapParams) error
+	EvaluateAll(ctx context.Context) ([]uint64, error)
 	EvaluateNumericAttributeValueEqual(ctx context.Context, arg EvaluateNumericAttributeValueEqualParams) (*Bitmap, error)
 	EvaluateNumericAttributeValueGreaterOrEqualThan(ctx context.Context, arg EvaluateNumericAttributeValueGreaterOrEqualThanParams) ([]*Bitmap, error)
 	EvaluateNumericAttributeValueGreaterThan(ctx context.Context, arg EvaluateNumericAttributeValueGreaterThanParams) ([]*Bitmap, error)

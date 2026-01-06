@@ -13,6 +13,15 @@ func (t *AST) Evaluate(
 	ctx context.Context,
 	q *store.Queries,
 ) (*roaring64.Bitmap, error) {
+	if t.Expr == nil {
+		ids, err := q.EvaluateAll(ctx)
+		if err != nil {
+			return nil, err
+		}
+		bm := roaring64.New()
+		bm.AddMany(ids)
+		return bm, nil
+	}
 	return t.Expr.Evaluate(ctx, q)
 }
 

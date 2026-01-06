@@ -1,3 +1,7 @@
+-- name: EvaluateAll :many
+SELECT id FROM payloads
+ORDER BY id DESC;
+
 -- name: EvaluateStringAttributeValueEqual :one
 SELECT bitmap FROM string_attributes_values_bitmaps
 WHERE name = sqlc.arg(name) AND value = sqlc.arg(value);
@@ -5,7 +9,6 @@ WHERE name = sqlc.arg(name) AND value = sqlc.arg(value);
 -- name: EvaluateNumericAttributeValueEqual :one
 SELECT bitmap FROM numeric_attributes_values_bitmaps
 WHERE name = sqlc.arg(name) AND value = sqlc.arg(value);
-
 
 -- name: EvaluateStringAttributeValueNotEqual :many
 SELECT bitmap FROM string_attributes_values_bitmaps
