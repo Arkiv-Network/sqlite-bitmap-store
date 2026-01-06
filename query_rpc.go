@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/Arkiv-Network/sqlite-bitmap-store/query"
 	"github.com/Arkiv-Network/sqlite-bitmap-store/store"
@@ -91,18 +93,13 @@ type EntityData struct {
 	TransactionIndexInBlock     *uint64         `json:"transactionIndexInBlock,omitempty"`
 	OperationIndexInTransaction *uint64         `json:"operationIndexInTransaction,omitempty"`
 
-	StringAttributes  []StringAttribute  `json:"stringAttributes,omitempty"`
-	NumericAttributes []NumericAttribute `json:"numericAttributes,omitempty"`
+	StringAttributes  []Attribute[string] `json:"stringAttributes,omitempty"`
+	NumericAttributes []Attribute[uint64] `json:"numericAttributes,omitempty"`
 }
 
-type StringAttribute struct {
+type Attribute[T any] struct {
 	Key   string `json:"key"`
-	Value string `json:"value"`
-}
-
-type NumericAttribute struct {
-	Key   string `json:"key"`
-	Value uint64 `json:"value"`
+	Value T      `json:"value"`
 }
 
 const maxResultBytes = 512 * 1024 * 1024
@@ -223,6 +220,35 @@ func pointerOf[T any](v T) *T {
 	return &v
 }
 
+func filterAttributes[T any](predicate func(string) bool, m map[string]T) []Attribute[T] {
+	res := []Attribute[T]{}
+
+	for k, v := range m {
+		if !predicate(k) {
+			continue
+		}
+		res = append(res, Attribute[T]{Key: k, Value: v})
+	}
+
+	slices.SortFunc(res, func(i, j Attribute[T]) int {
+		return strings.Compare(i.Key, j.Key)
+	})
+
+	return res
+}
+
+func syntheticPredicate(k string) bool {
+	return strings.HasPrefix(k, "$")
+}
+
+func nonSyntheticPredicate(k string) bool {
+	return !strings.HasPrefix(k, "$")
+}
+
+func anyPredicate(k string) bool {
+	return true
+}
+
 func toPayload(r store.RetrievePayloadsRow, includeData IncludeData) *EntityData {
 	res := &EntityData{}
 	if includeData.Key {
@@ -236,18 +262,16 @@ func toPayload(r store.RetrievePayloadsRow, includeData IncludeData) *EntityData
 		res.ContentType = &r.ContentType
 	}
 
-	// TODO fix splitting of synthetic from organic attributes
-	if includeData.Attributes || includeData.SyntheticAttributes {
-
-		res.StringAttributes = make([]StringAttribute, 0)
-		for k, v := range r.StringAttributes.Values {
-			res.StringAttributes = append(res.StringAttributes, StringAttribute{Key: k, Value: v})
-		}
-
-		res.NumericAttributes = make([]NumericAttribute, 0)
-		for k, v := range r.NumericAttributes.Values {
-			res.NumericAttributes = append(res.NumericAttributes, NumericAttribute{Key: k, Value: v})
-		}
+	switch {
+	case includeData.Attributes && includeData.SyntheticAttributes:
+		res.StringAttributes = filterAttributes(anyPredicate, r.StringAttributes.Values)
+		res.NumericAttributes = filterAttributes(anyPredicate, r.NumericAttributes.Values)
+	case includeData.Attributes:
+		res.StringAttributes = filterAttributes(nonSyntheticPredicate, r.StringAttributes.Values)
+		res.NumericAttributes = filterAttributes(nonSyntheticPredicate, r.NumericAttributes.Values)
+	case includeData.SyntheticAttributes:
+		res.StringAttributes = filterAttributes(syntheticPredicate, r.StringAttributes.Values)
+		res.NumericAttributes = filterAttributes(syntheticPredicate, r.NumericAttributes.Values)
 	}
 
 	return res
