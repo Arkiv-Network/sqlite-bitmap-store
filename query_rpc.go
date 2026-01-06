@@ -290,6 +290,14 @@ func toPayload(r store.RetrievePayloadsRow, includeData IncludeData) *EntityData
 		res.LastModifiedAtBlock = pointerOf(r.NumericAttributes.Values["$lastModifiedAtBlock"])
 	}
 
+	if includeData.TransactionIndexInBlock {
+		res.TransactionIndexInBlock = pointerOf(r.NumericAttributes.Values["$txIndex"])
+	}
+
+	if includeData.OperationIndexInTransaction {
+		res.OperationIndexInTransaction = pointerOf(r.NumericAttributes.Values["$opIndex"])
+	}
+
 	return res
 
 }
