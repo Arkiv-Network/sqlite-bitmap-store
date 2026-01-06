@@ -26,7 +26,10 @@
             '';
             hardeningDisable = [ "all" ];
 
-            packages = with pkgs; [ go ];
+            packages = with pkgs; [
+              go
+              sqlite
+            ];
           };
         }
       );
