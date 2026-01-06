@@ -10,6 +10,34 @@ import (
 	"strings"
 )
 
+const evaluateAll = `-- name: EvaluateAll :many
+SELECT id FROM payloads
+ORDER BY id DESC
+`
+
+func (q *Queries) EvaluateAll(ctx context.Context) ([]uint64, error) {
+	rows, err := q.query(ctx, q.evaluateAllStmt, evaluateAll)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uint64{}
+	for rows.Next() {
+		var id uint64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const evaluateNumericAttributeValueEqual = `-- name: EvaluateNumericAttributeValueEqual :one
 SELECT bitmap FROM numeric_attributes_values_bitmaps
 WHERE name = ?1 AND value = ?2

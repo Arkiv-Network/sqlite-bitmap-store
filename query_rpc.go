@@ -31,10 +31,10 @@ type IncludeData struct {
 }
 
 type Options struct {
-	AtBlock        *uint64      `json:"atBlock"`
-	IncludeData    *IncludeData `json:"includeData"`
-	ResultsPerPage *uint64      `json:"resultsPerPage"`
-	Cursor         string       `json:"cursor"`
+	AtBlock        *uint64      `json:"atBlock,omitempty"`
+	IncludeData    *IncludeData `json:"includeData,omitempty"`
+	ResultsPerPage *uint64      `json:"resultsPerPage,omitempty"`
+	Cursor         string       `json:"cursor,omitempty"`
 }
 
 func (o *Options) GetAtBlock() uint64 {
@@ -57,6 +57,9 @@ func (o *Options) GetIncludeData() IncludeData {
 			Key:         true,
 			ContentType: true,
 			Payload:     true,
+			Owner:       true,
+			Attributes:  true,
+			Expiration:  true,
 		}
 	}
 	return *o.IncludeData

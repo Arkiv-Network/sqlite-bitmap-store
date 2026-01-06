@@ -33,6 +33,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.deleteStringAttributeValueBitmapStmt, err = db.PrepareContext(ctx, deleteStringAttributeValueBitmap); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteStringAttributeValueBitmap: %w", err)
 	}
+	if q.evaluateAllStmt, err = db.PrepareContext(ctx, evaluateAll); err != nil {
+		return nil, fmt.Errorf("error preparing query EvaluateAll: %w", err)
+	}
 	if q.evaluateNumericAttributeValueEqualStmt, err = db.PrepareContext(ctx, evaluateNumericAttributeValueEqual); err != nil {
 		return nil, fmt.Errorf("error preparing query EvaluateNumericAttributeValueEqual: %w", err)
 	}
@@ -132,6 +135,11 @@ func (q *Queries) Close() error {
 	if q.deleteStringAttributeValueBitmapStmt != nil {
 		if cerr := q.deleteStringAttributeValueBitmapStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deleteStringAttributeValueBitmapStmt: %w", cerr)
+		}
+	}
+	if q.evaluateAllStmt != nil {
+		if cerr := q.evaluateAllStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evaluateAllStmt: %w", cerr)
 		}
 	}
 	if q.evaluateNumericAttributeValueEqualStmt != nil {
@@ -311,6 +319,7 @@ type Queries struct {
 	deleteNumericAttributeValueBitmapStmt               *sql.Stmt
 	deletePayloadForEntityKeyStmt                       *sql.Stmt
 	deleteStringAttributeValueBitmapStmt                *sql.Stmt
+	evaluateAllStmt                                     *sql.Stmt
 	evaluateNumericAttributeValueEqualStmt              *sql.Stmt
 	evaluateNumericAttributeValueGreaterOrEqualThanStmt *sql.Stmt
 	evaluateNumericAttributeValueGreaterThanStmt        *sql.Stmt
@@ -347,6 +356,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		deleteNumericAttributeValueBitmapStmt:  q.deleteNumericAttributeValueBitmapStmt,
 		deletePayloadForEntityKeyStmt:          q.deletePayloadForEntityKeyStmt,
 		deleteStringAttributeValueBitmapStmt:   q.deleteStringAttributeValueBitmapStmt,
+		evaluateAllStmt:                        q.evaluateAllStmt,
 		evaluateNumericAttributeValueEqualStmt: q.evaluateNumericAttributeValueEqualStmt,
 		evaluateNumericAttributeValueGreaterOrEqualThanStmt: q.evaluateNumericAttributeValueGreaterOrEqualThanStmt,
 		evaluateNumericAttributeValueGreaterThanStmt:        q.evaluateNumericAttributeValueGreaterThanStmt,
