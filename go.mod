@@ -1,6 +1,6 @@
 module github.com/Arkiv-Network/sqlite-bitmap-store
 
-go 1.25.5
+go 1.25.4
 
 require (
 	github.com/Arkiv-Network/arkiv-events v0.0.4
