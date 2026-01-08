@@ -34,7 +34,7 @@ type IncludeData struct {
 type Options struct {
 	AtBlock        *hexutil.Uint64 `json:"atBlock,omitempty"`
 	IncludeData    *IncludeData    `json:"includeData,omitempty"`
-	ResultsPerPage *hexutil.Uint64 `json:"resultsPerPage,omitempty"`
+	ResultsPerPage *uint64         `json:"resultsPerPage,omitempty"`
 	Cursor         string          `json:"cursor,omitempty"`
 }
 
@@ -46,10 +46,10 @@ func (o *Options) GetAtBlock() uint64 {
 }
 
 func (o *Options) GetResultsPerPage() uint64 {
-	if o == nil || o.ResultsPerPage == nil || uint64(*o.ResultsPerPage) > QueryResultCountLimit {
+	if o == nil || o.ResultsPerPage == nil || *o.ResultsPerPage > QueryResultCountLimit {
 		return QueryResultCountLimit
 	}
-	return uint64(*o.ResultsPerPage)
+	return *o.ResultsPerPage
 }
 
 func (o *Options) GetIncludeData() IncludeData {
