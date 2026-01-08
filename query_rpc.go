@@ -31,24 +31,24 @@ type IncludeData struct {
 }
 
 type Options struct {
-	AtBlock        *uint64      `json:"atBlock,omitempty"`
-	IncludeData    *IncludeData `json:"includeData,omitempty"`
-	ResultsPerPage *uint64      `json:"resultsPerPage,omitempty"`
-	Cursor         string       `json:"cursor,omitempty"`
+	AtBlock        *hexutil.Uint64 `json:"atBlock,omitempty"`
+	IncludeData    *IncludeData    `json:"includeData,omitempty"`
+	ResultsPerPage *hexutil.Uint64 `json:"resultsPerPage,omitempty"`
+	Cursor         string          `json:"cursor,omitempty"`
 }
 
 func (o *Options) GetAtBlock() uint64 {
 	if o == nil || o.AtBlock == nil {
 		return 0
 	}
-	return *o.AtBlock
+	return uint64(*o.AtBlock)
 }
 
 func (o *Options) GetResultsPerPage() uint64 {
-	if o == nil || o.ResultsPerPage == nil || *o.ResultsPerPage > QueryResultCountLimit {
+	if o == nil || o.ResultsPerPage == nil || uint64(*o.ResultsPerPage) > QueryResultCountLimit {
 		return QueryResultCountLimit
 	}
-	return *o.ResultsPerPage
+	return uint64(*o.ResultsPerPage)
 }
 
 func (o *Options) GetIncludeData() IncludeData {
