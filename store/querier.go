@@ -31,12 +31,12 @@ type Querier interface {
 	EvaluateStringAttributeValueNotEqual(ctx context.Context, arg EvaluateStringAttributeValueNotEqualParams) ([]*Bitmap, error)
 	EvaluateStringAttributeValueNotGlob(ctx context.Context, arg EvaluateStringAttributeValueNotGlobParams) ([]*Bitmap, error)
 	EvaluateStringAttributeValueNotInclusion(ctx context.Context, arg EvaluateStringAttributeValueNotInclusionParams) ([]*Bitmap, error)
-	GetLastBlock(ctx context.Context) (int64, error)
+	GetLastBlock(ctx context.Context) (uint64, error)
 	GetNumericAttributeValueBitmap(ctx context.Context, arg GetNumericAttributeValueBitmapParams) (*Bitmap, error)
 	GetPayloadForEntityKey(ctx context.Context, entityKey []byte) (GetPayloadForEntityKeyRow, error)
 	GetStringAttributeValueBitmap(ctx context.Context, arg GetStringAttributeValueBitmapParams) (*Bitmap, error)
 	RetrievePayloads(ctx context.Context, ids []uint64) ([]RetrievePayloadsRow, error)
-	UpsertLastBlock(ctx context.Context, block int64) error
+	UpsertLastBlock(ctx context.Context, block uint64) error
 	UpsertNumericAttributeValueBitmap(ctx context.Context, arg UpsertNumericAttributeValueBitmapParams) error
 	UpsertPayload(ctx context.Context, arg UpsertPayloadParams) (uint64, error)
 	UpsertStringAttributeValueBitmap(ctx context.Context, arg UpsertStringAttributeValueBitmapParams) error

@@ -53,9 +53,9 @@ const getLastBlock = `-- name: GetLastBlock :one
 SELECT block FROM last_block
 `
 
-func (q *Queries) GetLastBlock(ctx context.Context) (int64, error) {
+func (q *Queries) GetLastBlock(ctx context.Context) (uint64, error) {
 	row := q.queryRow(ctx, q.getLastBlockStmt, getLastBlock)
-	var block int64
+	var block uint64
 	err := row.Scan(&block)
 	return block, err
 }
@@ -129,7 +129,7 @@ VALUES (1, ?)
 ON CONFLICT (id) DO UPDATE SET block = EXCLUDED.block
 `
 
-func (q *Queries) UpsertLastBlock(ctx context.Context, block int64) error {
+func (q *Queries) UpsertLastBlock(ctx context.Context, block uint64) error {
 	_, err := q.exec(ctx, q.upsertLastBlockStmt, upsertLastBlock, block)
 	return err
 }

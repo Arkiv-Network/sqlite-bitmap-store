@@ -94,7 +94,7 @@ func (s *SQLiteStore) Close() error {
 	return s.writePool.Close()
 }
 
-func (s *SQLiteStore) GetLastBlock(ctx context.Context) (int64, error) {
+func (s *SQLiteStore) GetLastBlock(ctx context.Context) (uint64, error) {
 	return store.New(s.writePool).GetLastBlock(ctx)
 }
 
@@ -432,7 +432,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 			}
 
-			err = st.UpsertLastBlock(ctx, int64(lastBlock))
+			err = st.UpsertLastBlock(ctx, lastBlock)
 			if err != nil {
 				return fmt.Errorf("failed to upsert last block: %w", err)
 			}

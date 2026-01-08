@@ -6,7 +6,7 @@ package store
 
 type LastBlock struct {
 	ID    int64
-	Block int64
+	Block uint64
 }
 
 type NumericAttributesValuesBitmap struct {
