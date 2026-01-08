@@ -12,6 +12,12 @@ type PushIterator struct {
 	ch chan arkivevents.BatchOrError
 }
 
+func NewPushIterator() *PushIterator {
+	return &PushIterator{
+		ch: make(chan arkivevents.BatchOrError),
+	}
+}
+
 func (i *PushIterator) Iterator() iter.Seq[arkivevents.BatchOrError] {
 	return func(yield func(arkivevents.BatchOrError) bool) {
 		for batch := range i.ch {
