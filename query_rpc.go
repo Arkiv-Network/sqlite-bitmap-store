@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/Arkiv-Network/sqlite-bitmap-store/query"
 	"github.com/Arkiv-Network/sqlite-bitmap-store/store"
@@ -119,6 +120,29 @@ func (s *SQLiteStore) QueryEntities(
 		Data:        []json.RawMessage{},
 		BlockNumber: 0,
 		Cursor:      nil,
+	}
+
+	{
+		q := s.NewQueries()
+		timeoutCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+
+		for {
+			lastBlock, err := q.GetLastBlock(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("error getting last block: %w", err)
+			}
+			if lastBlock >= options.GetAtBlock() {
+				break
+			}
+			select {
+			case <-timeoutCtx.Done():
+				return nil, fmt.Errorf("context cancelled: %w", ctx.Err())
+			case <-time.After(100 * time.Millisecond):
+				continue
+			}
+		}
+		cancel()
 	}
 
 	q, err := query.Parse(queryStr)
