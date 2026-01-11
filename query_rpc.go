@@ -81,9 +81,8 @@ func (o *Options) GetCursor() (*uint64, error) {
 
 type QueryResponse struct {
 	Data        []json.RawMessage `json:"data"`
-	BlockNumber hexutil.Uint64    `json:"blockNumber"`
+	BlockNumber uint64            `json:"blockNumber"`
 	Cursor      *string           `json:"cursor,omitempty"`
-	TotalCount  hexutil.Uint64    `json:"totalCount"`
 }
 
 type EntityData struct {
@@ -159,8 +158,6 @@ func (s *SQLiteStore) QueryEntities(
 		if err != nil {
 			return fmt.Errorf("error evaluating query: %w", err)
 		}
-
-		res.TotalCount = hexutil.Uint64(bitmap.GetCardinality())
 
 		cursor, err := options.GetCursor()
 		if err != nil {
