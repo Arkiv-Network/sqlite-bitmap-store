@@ -204,6 +204,13 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						nbo := newNumericBitmapOps(st)
 
 						for k, v := range numericAttributes {
+
+							// skip txIndex and opIndex because they are not used for querying
+							switch k {
+							case "$txIndex", "$opIndex":
+								continue
+							}
+
 							err = nbo.Add(ctx, k, v, id)
 							if err != nil {
 								return fmt.Errorf("failed to add numeric attribute value bitmap: %w", err)
@@ -272,6 +279,12 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						nbo := newNumericBitmapOps(st)
 
 						for k, v := range oldNumericAttributes.Values {
+							// skip txIndex and opIndex because they are not used for querying
+							switch k {
+							case "$txIndex", "$opIndex":
+								continue
+							}
+
 							err = nbo.Remove(ctx, k, v, id)
 							if err != nil {
 								return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
@@ -281,6 +294,12 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						// TODO: delete entity from the indexes
 
 						for k, v := range stringAttributes {
+							// skip txIndex and opIndex because they are not used for querying
+							switch k {
+							case "$txIndex", "$opIndex":
+								continue
+							}
+
 							err = sbo.Add(ctx, k, v, id)
 							if err != nil {
 								return fmt.Errorf("failed to add string attribute value bitmap: %w", err)
@@ -325,6 +344,12 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						nbo := newNumericBitmapOps(st)
 
 						for k, v := range oldNumericAttributes.Values {
+							// skip txIndex and opIndex because they are not used for querying
+							switch k {
+							case "$txIndex", "$opIndex":
+								continue
+							}
+
 							err = nbo.Remove(ctx, k, v, latestPayload.ID)
 							if err != nil {
 								return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
