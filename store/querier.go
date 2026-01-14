@@ -32,6 +32,7 @@ type Querier interface {
 	EvaluateStringAttributeValueNotGlob(ctx context.Context, arg EvaluateStringAttributeValueNotGlobParams) ([]*Bitmap, error)
 	EvaluateStringAttributeValueNotInclusion(ctx context.Context, arg EvaluateStringAttributeValueNotInclusionParams) ([]*Bitmap, error)
 	GetLastBlock(ctx context.Context) (uint64, error)
+	GetNumberOfEntities(ctx context.Context) (int64, error)
 	GetNumericAttributeValueBitmap(ctx context.Context, arg GetNumericAttributeValueBitmapParams) (*Bitmap, error)
 	GetPayloadForEntityKey(ctx context.Context, entityKey []byte) (GetPayloadForEntityKeyRow, error)
 	GetStringAttributeValueBitmap(ctx context.Context, arg GetStringAttributeValueBitmapParams) (*Bitmap, error)
