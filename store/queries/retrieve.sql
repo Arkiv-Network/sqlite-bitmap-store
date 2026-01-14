@@ -3,3 +3,6 @@ SELECT entity_key, id, payload, content_type, string_attributes, numeric_attribu
 FROM payloads
 WHERE id IN (sqlc.slice(ids))
 ORDER BY id DESC;
+
+-- name: GetNumberOfEntities :one
+SELECT COUNT(*) FROM payloads;

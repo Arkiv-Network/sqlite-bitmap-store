@@ -93,6 +93,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getLastBlockStmt, err = db.PrepareContext(ctx, getLastBlock); err != nil {
 		return nil, fmt.Errorf("error preparing query GetLastBlock: %w", err)
 	}
+	if q.getNumberOfEntitiesStmt, err = db.PrepareContext(ctx, getNumberOfEntities); err != nil {
+		return nil, fmt.Errorf("error preparing query GetNumberOfEntities: %w", err)
+	}
 	if q.getNumericAttributeValueBitmapStmt, err = db.PrepareContext(ctx, getNumericAttributeValueBitmap); err != nil {
 		return nil, fmt.Errorf("error preparing query GetNumericAttributeValueBitmap: %w", err)
 	}
@@ -237,6 +240,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getLastBlockStmt: %w", cerr)
 		}
 	}
+	if q.getNumberOfEntitiesStmt != nil {
+		if cerr := q.getNumberOfEntitiesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getNumberOfEntitiesStmt: %w", cerr)
+		}
+	}
 	if q.getNumericAttributeValueBitmapStmt != nil {
 		if cerr := q.getNumericAttributeValueBitmapStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getNumericAttributeValueBitmapStmt: %w", cerr)
@@ -339,6 +347,7 @@ type Queries struct {
 	evaluateStringAttributeValueNotGlobStmt             *sql.Stmt
 	evaluateStringAttributeValueNotInclusionStmt        *sql.Stmt
 	getLastBlockStmt                                    *sql.Stmt
+	getNumberOfEntitiesStmt                             *sql.Stmt
 	getNumericAttributeValueBitmapStmt                  *sql.Stmt
 	getPayloadForEntityKeyStmt                          *sql.Stmt
 	getStringAttributeValueBitmapStmt                   *sql.Stmt
@@ -376,6 +385,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		evaluateStringAttributeValueNotGlobStmt:             q.evaluateStringAttributeValueNotGlobStmt,
 		evaluateStringAttributeValueNotInclusionStmt:        q.evaluateStringAttributeValueNotInclusionStmt,
 		getLastBlockStmt:                      q.getLastBlockStmt,
+		getNumberOfEntitiesStmt:               q.getNumberOfEntitiesStmt,
 		getNumericAttributeValueBitmapStmt:    q.getNumericAttributeValueBitmapStmt,
 		getPayloadForEntityKeyStmt:            q.getPayloadForEntityKeyStmt,
 		getStringAttributeValueBitmapStmt:     q.getStringAttributeValueBitmapStmt,

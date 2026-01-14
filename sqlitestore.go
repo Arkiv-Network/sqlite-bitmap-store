@@ -486,3 +486,20 @@ func (s *SQLiteStore) ReadTransaction(ctx context.Context, fn func(q *store.Quer
 
 	return fn(st)
 }
+
+func (s *SQLiteStore) GetNumberOfEntities(ctx context.Context) (numberOfEntities uint64, err error) {
+	err = s.ReadTransaction(ctx, func(q *store.Queries) error {
+		ni, err := q.GetNumberOfEntities(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get number of entities: %w", err)
+		}
+		numberOfEntities = uint64(ni)
+		return nil
+	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	return numberOfEntities, nil
+}

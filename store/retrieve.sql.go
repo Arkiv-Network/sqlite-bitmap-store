@@ -10,6 +10,17 @@ import (
 	"strings"
 )
 
+const getNumberOfEntities = `-- name: GetNumberOfEntities :one
+SELECT COUNT(*) FROM payloads
+`
+
+func (q *Queries) GetNumberOfEntities(ctx context.Context) (int64, error) {
+	row := q.queryRow(ctx, q.getNumberOfEntitiesStmt, getNumberOfEntities)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const retrievePayloads = `-- name: RetrievePayloads :many
 SELECT entity_key, id, payload, content_type, string_attributes, numeric_attributes
 FROM payloads
