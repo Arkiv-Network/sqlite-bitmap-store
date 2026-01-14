@@ -152,6 +152,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 				}
 
 				// blockNumber := block.Number
+			operationLoop:
 				for _, operation := range block.Operations {
 
 					switch {
@@ -223,7 +224,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						lastUpdate := updates[len(updates)-1]
 
 						if operation.Update != lastUpdate {
-							continue mainLoop
+							continue operationLoop
 						}
 
 						key := operation.Update.Key.Bytes()
