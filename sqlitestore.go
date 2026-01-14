@@ -127,6 +127,8 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 				return fmt.Errorf("failed to get last block from database: %w", err)
 			}
 
+			cache := newBitmapCache(st)
+
 		mainLoop:
 			for _, block := range batch.Batch.Blocks {
 
@@ -152,6 +154,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 				}
 
 				// blockNumber := block.Number
+			operationLoop:
 				for _, operation := range block.Operations {
 
 					switch {
@@ -192,16 +195,12 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 							return fmt.Errorf("failed to insert payload %s at block %d txIndex %d opIndex %d: %w", key.Hex(), block.Number, operation.TxIndex, operation.OpIndex, err)
 						}
 
-						sbo := newStringBitmapOps(st)
-
 						for k, v := range stringAttributes {
-							err = sbo.Add(ctx, k, v, id)
+							err = cache.AddToStringBitmap(ctx, k, v, id)
 							if err != nil {
 								return fmt.Errorf("failed to add string attribute value bitmap: %w", err)
 							}
 						}
-
-						nbo := newNumericBitmapOps(st)
 
 						for k, v := range numericAttributes {
 
@@ -211,7 +210,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 								continue
 							}
 
-							err = nbo.Add(ctx, k, v, id)
+							err = cache.AddToNumericBitmap(ctx, k, v, id)
 							if err != nil {
 								return fmt.Errorf("failed to add numeric attribute value bitmap: %w", err)
 							}
@@ -223,7 +222,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						lastUpdate := updates[len(updates)-1]
 
 						if operation.Update != lastUpdate {
-							continue mainLoop
+							continue operationLoop
 						}
 
 						key := operation.Update.Key.Bytes()
@@ -267,16 +266,12 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 							return fmt.Errorf("failed to insert payload 0x%x at block %d txIndex %d opIndex %d: %w", key, block.Number, operation.TxIndex, operation.OpIndex, err)
 						}
 
-						sbo := newStringBitmapOps(st)
-
 						for k, v := range oldStringAttributes.Values {
-							err = sbo.Remove(ctx, k, v, id)
+							err = cache.RemoveFromStringBitmap(ctx, k, v, id)
 							if err != nil {
 								return fmt.Errorf("failed to remove string attribute value bitmap: %w", err)
 							}
 						}
-
-						nbo := newNumericBitmapOps(st)
 
 						for k, v := range oldNumericAttributes.Values {
 							// skip txIndex and opIndex because they are not used for querying
@@ -285,7 +280,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 								continue
 							}
 
-							err = nbo.Remove(ctx, k, v, id)
+							err = cache.RemoveFromNumericBitmap(ctx, k, v, id)
 							if err != nil {
 								return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
 							}
@@ -294,7 +289,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						// TODO: delete entity from the indexes
 
 						for k, v := range stringAttributes {
-							err = sbo.Add(ctx, k, v, id)
+							err = cache.AddToStringBitmap(ctx, k, v, id)
 							if err != nil {
 								return fmt.Errorf("failed to add string attribute value bitmap: %w", err)
 							}
@@ -307,7 +302,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 								continue
 							}
 
-							err = nbo.Add(ctx, k, v, id)
+							err = cache.AddToNumericBitmap(ctx, k, v, id)
 							if err != nil {
 								return fmt.Errorf("failed to add numeric attribute value bitmap: %w", err)
 							}
@@ -332,16 +327,12 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 						oldNumericAttributes := latestPayload.NumericAttributes
 
-						sbo := newStringBitmapOps(st)
-
 						for k, v := range oldStringAttributes.Values {
-							err = sbo.Remove(ctx, k, v, latestPayload.ID)
+							err = cache.RemoveFromStringBitmap(ctx, k, v, latestPayload.ID)
 							if err != nil {
 								return fmt.Errorf("failed to remove string attribute value bitmap: %w", err)
 							}
 						}
-
-						nbo := newNumericBitmapOps(st)
 
 						for k, v := range oldNumericAttributes.Values {
 							// skip txIndex and opIndex because they are not used for querying
@@ -350,7 +341,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 								continue
 							}
 
-							err = nbo.Remove(ctx, k, v, latestPayload.ID)
+							err = cache.RemoveFromNumericBitmap(ctx, k, v, latestPayload.ID)
 							if err != nil {
 								return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
 							}
@@ -392,14 +383,12 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 							return fmt.Errorf("failed to insert payload at block %d txIndex %d opIndex %d: %w", block.Number, operation.TxIndex, operation.OpIndex, err)
 						}
 
-						nbo := newNumericBitmapOps(st)
-
-						err = nbo.Remove(ctx, "$expiration", oldExpiration, id)
+						err = cache.RemoveFromNumericBitmap(ctx, "$expiration", oldExpiration, id)
 						if err != nil {
 							return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
 						}
 
-						err = nbo.Add(ctx, "$expiration", newToBlock, id)
+						err = cache.AddToNumericBitmap(ctx, "$expiration", newToBlock, id)
 						if err != nil {
 							return fmt.Errorf("failed to add numeric attribute value bitmap: %w", err)
 						}
@@ -435,14 +424,12 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 							return fmt.Errorf("failed to insert payload at block %d txIndex %d opIndex %d: %w", block.Number, operation.TxIndex, operation.OpIndex, err)
 						}
 
-						sbo := newStringBitmapOps(st)
-
-						err = sbo.Remove(ctx, "$owner", oldOwner, id)
+						err = cache.RemoveFromStringBitmap(ctx, "$owner", oldOwner, id)
 						if err != nil {
 							return fmt.Errorf("failed to remove string attribute value bitmap for owner: %w", err)
 						}
 
-						err = sbo.Add(ctx, "$owner", newOwner, id)
+						err = cache.AddToStringBitmap(ctx, "$owner", newOwner, id)
 						if err != nil {
 							return fmt.Errorf("failed to add string attribute value bitmap for owner: %w", err)
 						}
@@ -460,6 +447,11 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 			err = st.UpsertLastBlock(ctx, lastBlock)
 			if err != nil {
 				return fmt.Errorf("failed to upsert last block: %w", err)
+			}
+
+			err = cache.Flush(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to flush bitmap cache: %w", err)
 			}
 
 			err = tx.Commit()
