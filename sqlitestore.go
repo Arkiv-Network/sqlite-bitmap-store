@@ -23,9 +23,10 @@ import (
 )
 
 type SQLiteStore struct {
-	writePool *sql.DB
-	readPool  *sql.DB
-	log       *slog.Logger
+	writePool      *sql.DB
+	readPool       *sql.DB
+	historicTxPool *HistoricTransactionPool
+	log            *slog.Logger
 }
 
 func NewSQLiteStore(
@@ -39,20 +40,20 @@ func NewSQLiteStore(
 		return nil, fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	writeURL := fmt.Sprintf("file:%s?mode=rwc&_busy_timeout=11000&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true&_txlock=immediate&_cache_size=65536", dbPath)
+	writeURL := fmt.Sprintf("file:%s?mode=rwc&_busy_timeout=11000&_journal_mode=WAL&_wal_autocheckpoint=0&_auto_vacuum=incremental&_foreign_keys=true&_txlock=immediate&_cache_size=65536", dbPath)
 
 	writePool, err := sql.Open("sqlite3", writeURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open write pool: %w", err)
 	}
 
-	readURL := fmt.Sprintf("file:%s?_query_only=true&_busy_timeout=11000&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true&_txlock=deferred&_cache_size=65536", dbPath)
+	readURL := fmt.Sprintf("file:%s?_query_only=true&_busy_timeout=11000&_journal_mode=WAL&_wal_autocheckpoint=0&_auto_vacuum=incremental&_txlock=deferred&_cache_size=65536", dbPath)
 	readPool, err := sql.Open("sqlite3", readURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open read pool: %w", err)
 	}
 
-	readPool.SetMaxOpenConns(numberOfReadThreads)
+	//readPool.SetMaxOpenConns(numberOfReadThreads)
 	readPool.SetMaxIdleConns(numberOfReadThreads)
 	readPool.SetConnMaxLifetime(0)
 	readPool.SetConnMaxIdleTime(0)
@@ -64,7 +65,12 @@ func NewSQLiteStore(
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
-	return &SQLiteStore{writePool: writePool, readPool: readPool, log: log}, nil
+	return &SQLiteStore{
+		writePool:      writePool,
+		readPool:       readPool,
+		historicTxPool: NewHistoricTransactionPool(readPool, log),
+		log:            log,
+	}, nil
 }
 
 func runMigrations(db *sql.DB) error {
@@ -95,6 +101,7 @@ func (s *SQLiteStore) Close() error {
 }
 
 func (s *SQLiteStore) GetLastBlock(ctx context.Context) (uint64, error) {
+	// TODO shouldn't this use the read pool??
 	return store.New(s.writePool).GetLastBlock(ctx)
 }
 
@@ -105,367 +112,365 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 			return fmt.Errorf("failed to follow events: %w", batch.Error)
 		}
 
-		err := func() error {
-
-			tx, err := s.writePool.BeginTx(ctx, &sql.TxOptions{
-				Isolation: sql.LevelSerializable,
-				ReadOnly:  false,
-			})
-			if err != nil {
-				return fmt.Errorf("failed to begin transaction: %w", err)
-			}
-			defer tx.Rollback()
-
-			st := store.New(tx)
-
-			firstBlock := batch.Batch.Blocks[0].Number
-			lastBlock := batch.Batch.Blocks[len(batch.Batch.Blocks)-1].Number
-			s.log.Info("new batch", "firstBlock", firstBlock, "lastBlock", lastBlock)
-
-			lastBlockFromDB, err := st.GetLastBlock(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to get last block from database: %w", err)
-			}
-
-		mainLoop:
-			for _, block := range batch.Batch.Blocks {
-
-				updates := 0
-				deletes := 0
-				extends := 0
-				creates := 0
-				ownerChanges := 0
-
-				if block.Number <= uint64(lastBlockFromDB) {
-					s.log.Info("skipping block", "block", block.Number, "lastBlockFromDB", lastBlockFromDB)
-					continue mainLoop
-				}
-
-				updatesMap := map[common.Hash][]*events.OPUpdate{}
-
-				for _, operation := range block.Operations {
-					if operation.Update != nil {
-						currentUpdates := updatesMap[operation.Update.Key]
-						currentUpdates = append(currentUpdates, operation.Update)
-						updatesMap[operation.Update.Key] = currentUpdates
-					}
-				}
-
-				// blockNumber := block.Number
-				for _, operation := range block.Operations {
-
-					switch {
-
-					case operation.Create != nil:
-						// expiresAtBlock := blockNumber + operation.Create.BTL
-						creates++
-						key := operation.Create.Key
-
-						stringAttributes := maps.Clone(operation.Create.StringAttributes)
-
-						stringAttributes["$owner"] = strings.ToLower(operation.Create.Owner.Hex())
-						stringAttributes["$creator"] = strings.ToLower(operation.Create.Owner.Hex())
-						stringAttributes["$key"] = strings.ToLower(key.Hex())
-
-						untilBlock := block.Number + operation.Create.BTL
-						numericAttributes := maps.Clone(operation.Create.NumericAttributes)
-						numericAttributes["$expiration"] = uint64(untilBlock)
-						numericAttributes["$createdAtBlock"] = uint64(block.Number)
-						numericAttributes["$lastModifiedAtBlock"] = uint64(block.Number)
-
-						sequence := block.Number<<32 | operation.TxIndex<<16 | operation.OpIndex
-						numericAttributes["$sequence"] = sequence
-						numericAttributes["$txIndex"] = uint64(operation.TxIndex)
-						numericAttributes["$opIndex"] = uint64(operation.OpIndex)
-
-						id, err := st.UpsertPayload(
-							ctx,
-							store.UpsertPayloadParams{
-								EntityKey:         operation.Create.Key.Bytes(),
-								Payload:           operation.Create.Content,
-								ContentType:       operation.Create.ContentType,
-								StringAttributes:  store.NewStringAttributes(stringAttributes),
-								NumericAttributes: store.NewNumericAttributes(numericAttributes),
-							},
-						)
-						if err != nil {
-							return fmt.Errorf("failed to insert payload %s at block %d txIndex %d opIndex %d: %w", key.Hex(), block.Number, operation.TxIndex, operation.OpIndex, err)
-						}
-
-						sbo := newStringBitmapOps(st)
-
-						for k, v := range stringAttributes {
-							err = sbo.Add(ctx, k, v, id)
-							if err != nil {
-								return fmt.Errorf("failed to add string attribute value bitmap: %w", err)
-							}
-						}
-
-						nbo := newNumericBitmapOps(st)
-
-						for k, v := range numericAttributes {
-							err = nbo.Add(ctx, k, v, id)
-							if err != nil {
-								return fmt.Errorf("failed to add numeric attribute value bitmap: %w", err)
-							}
-						}
-					case operation.Update != nil:
-						updates++
-
-						updates := updatesMap[operation.Update.Key]
-						lastUpdate := updates[len(updates)-1]
-
-						if operation.Update != lastUpdate {
-							continue mainLoop
-						}
-
-						key := operation.Update.Key.Bytes()
-
-						latestPayload, err := st.GetPayloadForEntityKey(ctx, key)
-						if err != nil {
-							return fmt.Errorf("failed to get latest payload: %w", err)
-						}
-
-						oldStringAttributes := latestPayload.StringAttributes
-
-						oldNumericAttributes := latestPayload.NumericAttributes
-
-						stringAttributes := maps.Clone(operation.Update.StringAttributes)
-
-						stringAttributes["$owner"] = strings.ToLower(operation.Update.Owner.Hex())
-						stringAttributes["$creator"] = oldStringAttributes.Values["$creator"]
-						stringAttributes["$key"] = strings.ToLower(operation.Update.Key.Hex())
-
-						untilBlock := block.Number + operation.Update.BTL
-						numericAttributes := maps.Clone(operation.Update.NumericAttributes)
-						numericAttributes["$expiration"] = uint64(untilBlock)
-						numericAttributes["$createdAtBlock"] = oldNumericAttributes.Values["$createdAtBlock"]
-
-						numericAttributes["$sequence"] = oldNumericAttributes.Values["$sequence"]
-						numericAttributes["$txIndex"] = oldNumericAttributes.Values["$txIndex"]
-						numericAttributes["$opIndex"] = oldNumericAttributes.Values["$opIndex"]
-						numericAttributes["$lastModifiedAtBlock"] = uint64(block.Number)
-
-						id, err := st.UpsertPayload(
-							ctx,
-							store.UpsertPayloadParams{
-								EntityKey:         key,
-								Payload:           operation.Update.Content,
-								ContentType:       operation.Update.ContentType,
-								StringAttributes:  store.NewStringAttributes(stringAttributes),
-								NumericAttributes: store.NewNumericAttributes(numericAttributes),
-							},
-						)
-						if err != nil {
-							return fmt.Errorf("failed to insert payload 0x%x at block %d txIndex %d opIndex %d: %w", key, block.Number, operation.TxIndex, operation.OpIndex, err)
-						}
-
-						sbo := newStringBitmapOps(st)
-
-						for k, v := range oldStringAttributes.Values {
-							err = sbo.Remove(ctx, k, v, id)
-							if err != nil {
-								return fmt.Errorf("failed to remove string attribute value bitmap: %w", err)
-							}
-						}
-
-						nbo := newNumericBitmapOps(st)
-
-						for k, v := range oldNumericAttributes.Values {
-							err = nbo.Remove(ctx, k, v, id)
-							if err != nil {
-								return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
-							}
-						}
-
-						// TODO: delete entity from the indexes
-
-						for k, v := range stringAttributes {
-							err = sbo.Add(ctx, k, v, id)
-							if err != nil {
-								return fmt.Errorf("failed to add string attribute value bitmap: %w", err)
-							}
-						}
-
-						for k, v := range numericAttributes {
-							err = nbo.Add(ctx, k, v, id)
-							if err != nil {
-								return fmt.Errorf("failed to add numeric attribute value bitmap: %w", err)
-							}
-						}
-
-					case operation.Delete != nil || operation.Expire != nil:
-
-						deletes++
-						var key []byte
-						if operation.Delete != nil {
-							key = common.Hash(*operation.Delete).Bytes()
-						} else {
-							key = common.Hash(*operation.Expire).Bytes()
-						}
-
-						latestPayload, err := st.GetPayloadForEntityKey(ctx, key)
-						if err != nil {
-							return fmt.Errorf("failed to get latest payload: %w", err)
-						}
-
-						oldStringAttributes := latestPayload.StringAttributes
-
-						oldNumericAttributes := latestPayload.NumericAttributes
-
-						sbo := newStringBitmapOps(st)
-
-						for k, v := range oldStringAttributes.Values {
-							err = sbo.Remove(ctx, k, v, latestPayload.ID)
-							if err != nil {
-								return fmt.Errorf("failed to remove string attribute value bitmap: %w", err)
-							}
-						}
-
-						nbo := newNumericBitmapOps(st)
-
-						for k, v := range oldNumericAttributes.Values {
-							err = nbo.Remove(ctx, k, v, latestPayload.ID)
-							if err != nil {
-								return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
-							}
-						}
-
-						err = st.DeletePayloadForEntityKey(ctx, key)
-						if err != nil {
-							return fmt.Errorf("failed to delete payload: %w", err)
-						}
-
-					case operation.ExtendBTL != nil:
-
-						extends++
-
-						key := operation.ExtendBTL.Key.Bytes()
-
-						latestPayload, err := st.GetPayloadForEntityKey(ctx, key)
-						if err != nil {
-							return fmt.Errorf("failed to get latest payload: %w", err)
-						}
-
-						oldNumericAttributes := latestPayload.NumericAttributes
-
-						newToBlock := block.Number + operation.ExtendBTL.BTL
-
-						numericAttributes := maps.Clone(oldNumericAttributes.Values)
-						numericAttributes["$expiration"] = uint64(newToBlock)
-
-						oldExpiration := oldNumericAttributes.Values["$expiration"]
-
-						id, err := st.UpsertPayload(ctx, store.UpsertPayloadParams{
-							EntityKey:         key,
-							Payload:           latestPayload.Payload,
-							ContentType:       latestPayload.ContentType,
-							StringAttributes:  latestPayload.StringAttributes,
-							NumericAttributes: store.NewNumericAttributes(numericAttributes),
-						})
-						if err != nil {
-							return fmt.Errorf("failed to insert payload at block %d txIndex %d opIndex %d: %w", block.Number, operation.TxIndex, operation.OpIndex, err)
-						}
-
-						nbo := newNumericBitmapOps(st)
-
-						err = nbo.Remove(ctx, "$expiration", oldExpiration, id)
-						if err != nil {
-							return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
-						}
-
-						err = nbo.Add(ctx, "$expiration", newToBlock, id)
-						if err != nil {
-							return fmt.Errorf("failed to add numeric attribute value bitmap: %w", err)
-						}
-
-					case operation.ChangeOwner != nil:
-						ownerChanges++
-						key := operation.ChangeOwner.Key.Bytes()
-
-						latestPayload, err := st.GetPayloadForEntityKey(ctx, key)
-						if err != nil {
-							return fmt.Errorf("failed to get latest payload: %w", err)
-						}
-
-						stringAttributes := latestPayload.StringAttributes
-
-						oldOwner := stringAttributes.Values["$owner"]
-
-						newOwner := strings.ToLower(operation.ChangeOwner.Owner.Hex())
-
-						stringAttributes.Values["$owner"] = newOwner
-
-						id, err := st.UpsertPayload(
-							ctx,
-							store.UpsertPayloadParams{
-								EntityKey:         key,
-								Payload:           latestPayload.Payload,
-								ContentType:       latestPayload.ContentType,
-								StringAttributes:  stringAttributes,
-								NumericAttributes: latestPayload.NumericAttributes,
-							},
-						)
-						if err != nil {
-							return fmt.Errorf("failed to insert payload at block %d txIndex %d opIndex %d: %w", block.Number, operation.TxIndex, operation.OpIndex, err)
-						}
-
-						sbo := newStringBitmapOps(st)
-
-						err = sbo.Remove(ctx, "$owner", oldOwner, id)
-						if err != nil {
-							return fmt.Errorf("failed to remove string attribute value bitmap for owner: %w", err)
-						}
-
-						err = sbo.Add(ctx, "$owner", newOwner, id)
-						if err != nil {
-							return fmt.Errorf("failed to add string attribute value bitmap for owner: %w", err)
-						}
-
-					default:
-						return fmt.Errorf("unknown operation: %v", operation)
-					}
-
-				}
-
-				s.log.Info("block updated", "block", block.Number, "creates", creates, "updates", updates, "deletes", deletes, "extends", extends, "ownerChanges", ownerChanges)
-
-			}
-
-			err = st.UpsertLastBlock(ctx, lastBlock)
-			if err != nil {
-				return fmt.Errorf("failed to upsert last block: %w", err)
-			}
-
-			err = tx.Commit()
-			if err != nil {
-				return fmt.Errorf("failed to commit transaction: %w", err)
-			}
-
-			return nil
-		}()
+		firstBlock := batch.Batch.Blocks[0].Number
+		lastBlock := batch.Batch.Blocks[len(batch.Batch.Blocks)-1].Number
+		s.log.Info("new batch", "firstBlock", firstBlock, "lastBlock", lastBlock)
+
+		lastBlockFromDB, err := s.GetLastBlock(ctx)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get last block from database: %w", err)
 		}
+
+		for _, block := range batch.Batch.Blocks {
+			if block.Number <= uint64(lastBlockFromDB) {
+				s.log.Info("skipping block", "block", block.Number, "lastBlockFromDB", lastBlockFromDB)
+				continue
+			}
+			err := s.processBlock(ctx, &block)
+			if err != nil {
+				return err
+			}
+		}
+
 	}
 
 	return nil
 }
 
-func (s *SQLiteStore) NewQueries() *store.Queries {
-	return store.New(s.readPool)
-}
+func (s *SQLiteStore) processBlock(ctx context.Context, block *events.Block) error {
+	updates := 0
+	deletes := 0
+	extends := 0
+	creates := 0
+	ownerChanges := 0
 
-func (s *SQLiteStore) ReadTransaction(ctx context.Context, fn func(q *store.Queries) error) error {
-	tx, err := s.readPool.BeginTx(ctx, &sql.TxOptions{
-		ReadOnly: true,
+	updatesMap := map[common.Hash][]*events.OPUpdate{}
+
+	for _, operation := range block.Operations {
+		if operation.Update != nil {
+			currentUpdates := updatesMap[operation.Update.Key]
+			currentUpdates = append(currentUpdates, operation.Update)
+			updatesMap[operation.Update.Key] = currentUpdates
+		}
+	}
+
+	tx, err := s.writePool.BeginTx(ctx, &sql.TxOptions{
+		Isolation: sql.LevelSerializable,
+		ReadOnly:  false,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
+	defer func() {
+		if _, err := s.writePool.Exec("PRAGMA wal_checkpoint(PASSIVE)"); err != nil {
+			s.log.Warn("failed to checkpoint the WAL", "err", err)
+		}
+	}()
 
 	st := store.New(tx)
 
-	return fn(st)
+	// blockNumber := block.Number
+	for _, operation := range block.Operations {
+
+		switch {
+
+		case operation.Create != nil:
+			// expiresAtBlock := blockNumber + operation.Create.BTL
+			creates++
+			key := operation.Create.Key
+
+			stringAttributes := maps.Clone(operation.Create.StringAttributes)
+
+			stringAttributes["$owner"] = strings.ToLower(operation.Create.Owner.Hex())
+			stringAttributes["$creator"] = strings.ToLower(operation.Create.Owner.Hex())
+			stringAttributes["$key"] = strings.ToLower(key.Hex())
+
+			untilBlock := block.Number + operation.Create.BTL
+			numericAttributes := maps.Clone(operation.Create.NumericAttributes)
+			numericAttributes["$expiration"] = uint64(untilBlock)
+			numericAttributes["$createdAtBlock"] = uint64(block.Number)
+			numericAttributes["$lastModifiedAtBlock"] = uint64(block.Number)
+
+			sequence := block.Number<<32 | operation.TxIndex<<16 | operation.OpIndex
+			numericAttributes["$sequence"] = sequence
+			numericAttributes["$txIndex"] = uint64(operation.TxIndex)
+			numericAttributes["$opIndex"] = uint64(operation.OpIndex)
+
+			id, err := st.UpsertPayload(
+				ctx,
+				store.UpsertPayloadParams{
+					EntityKey:         operation.Create.Key.Bytes(),
+					Payload:           operation.Create.Content,
+					ContentType:       operation.Create.ContentType,
+					StringAttributes:  store.NewStringAttributes(stringAttributes),
+					NumericAttributes: store.NewNumericAttributes(numericAttributes),
+				},
+			)
+			if err != nil {
+				return fmt.Errorf("failed to insert payload %s at block %d txIndex %d opIndex %d: %w", key.Hex(), block.Number, operation.TxIndex, operation.OpIndex, err)
+			}
+
+			sbo := newStringBitmapOps(st)
+
+			for k, v := range stringAttributes {
+				err = sbo.Add(ctx, k, v, id)
+				if err != nil {
+					return fmt.Errorf("failed to add string attribute value bitmap: %w", err)
+				}
+			}
+
+			nbo := newNumericBitmapOps(st)
+
+			for k, v := range numericAttributes {
+				err = nbo.Add(ctx, k, v, id)
+				if err != nil {
+					return fmt.Errorf("failed to add numeric attribute value bitmap: %w", err)
+				}
+			}
+		case operation.Update != nil:
+			updates++
+
+			updates := updatesMap[operation.Update.Key]
+			lastUpdate := updates[len(updates)-1]
+
+			if operation.Update != lastUpdate {
+				return nil
+			}
+
+			key := operation.Update.Key.Bytes()
+
+			latestPayload, err := st.GetPayloadForEntityKey(ctx, key)
+			if err != nil {
+				return fmt.Errorf("failed to get latest payload: %w", err)
+			}
+
+			oldStringAttributes := latestPayload.StringAttributes
+
+			oldNumericAttributes := latestPayload.NumericAttributes
+
+			stringAttributes := maps.Clone(operation.Update.StringAttributes)
+
+			stringAttributes["$owner"] = strings.ToLower(operation.Update.Owner.Hex())
+			stringAttributes["$creator"] = oldStringAttributes.Values["$creator"]
+			stringAttributes["$key"] = strings.ToLower(operation.Update.Key.Hex())
+
+			untilBlock := block.Number + operation.Update.BTL
+			numericAttributes := maps.Clone(operation.Update.NumericAttributes)
+			numericAttributes["$expiration"] = uint64(untilBlock)
+			numericAttributes["$createdAtBlock"] = oldNumericAttributes.Values["$createdAtBlock"]
+
+			numericAttributes["$sequence"] = oldNumericAttributes.Values["$sequence"]
+			numericAttributes["$txIndex"] = oldNumericAttributes.Values["$txIndex"]
+			numericAttributes["$opIndex"] = oldNumericAttributes.Values["$opIndex"]
+			numericAttributes["$lastModifiedAtBlock"] = uint64(block.Number)
+
+			id, err := st.UpsertPayload(
+				ctx,
+				store.UpsertPayloadParams{
+					EntityKey:         key,
+					Payload:           operation.Update.Content,
+					ContentType:       operation.Update.ContentType,
+					StringAttributes:  store.NewStringAttributes(stringAttributes),
+					NumericAttributes: store.NewNumericAttributes(numericAttributes),
+				},
+			)
+			if err != nil {
+				return fmt.Errorf("failed to insert payload 0x%x at block %d txIndex %d opIndex %d: %w", key, block.Number, operation.TxIndex, operation.OpIndex, err)
+			}
+
+			sbo := newStringBitmapOps(st)
+
+			for k, v := range oldStringAttributes.Values {
+				err = sbo.Remove(ctx, k, v, id)
+				if err != nil {
+					return fmt.Errorf("failed to remove string attribute value bitmap: %w", err)
+				}
+			}
+
+			nbo := newNumericBitmapOps(st)
+
+			for k, v := range oldNumericAttributes.Values {
+				err = nbo.Remove(ctx, k, v, id)
+				if err != nil {
+					return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
+				}
+			}
+
+			for k, v := range stringAttributes {
+				err = sbo.Add(ctx, k, v, id)
+				if err != nil {
+					return fmt.Errorf("failed to add string attribute value bitmap: %w", err)
+				}
+			}
+
+			for k, v := range numericAttributes {
+				err = nbo.Add(ctx, k, v, id)
+				if err != nil {
+					return fmt.Errorf("failed to add numeric attribute value bitmap: %w", err)
+				}
+			}
+
+		case operation.Delete != nil || operation.Expire != nil:
+
+			deletes++
+			var key []byte
+			if operation.Delete != nil {
+				key = common.Hash(*operation.Delete).Bytes()
+			} else {
+				key = common.Hash(*operation.Expire).Bytes()
+			}
+
+			latestPayload, err := st.GetPayloadForEntityKey(ctx, key)
+			if err != nil {
+				return fmt.Errorf("failed to get latest payload: %w", err)
+			}
+
+			oldStringAttributes := latestPayload.StringAttributes
+
+			oldNumericAttributes := latestPayload.NumericAttributes
+
+			sbo := newStringBitmapOps(st)
+
+			for k, v := range oldStringAttributes.Values {
+				err = sbo.Remove(ctx, k, v, latestPayload.ID)
+				if err != nil {
+					return fmt.Errorf("failed to remove string attribute value bitmap: %w", err)
+				}
+			}
+
+			nbo := newNumericBitmapOps(st)
+
+			for k, v := range oldNumericAttributes.Values {
+				err = nbo.Remove(ctx, k, v, latestPayload.ID)
+				if err != nil {
+					return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
+				}
+			}
+
+			err = st.DeletePayloadForEntityKey(ctx, key)
+			if err != nil {
+				return fmt.Errorf("failed to delete payload: %w", err)
+			}
+
+		case operation.ExtendBTL != nil:
+
+			extends++
+
+			key := operation.ExtendBTL.Key.Bytes()
+
+			latestPayload, err := st.GetPayloadForEntityKey(ctx, key)
+			if err != nil {
+				return fmt.Errorf("failed to get latest payload: %w", err)
+			}
+
+			oldNumericAttributes := latestPayload.NumericAttributes
+
+			newToBlock := block.Number + operation.ExtendBTL.BTL
+
+			numericAttributes := maps.Clone(oldNumericAttributes.Values)
+			numericAttributes["$expiration"] = uint64(newToBlock)
+
+			oldExpiration := oldNumericAttributes.Values["$expiration"]
+
+			id, err := st.UpsertPayload(ctx, store.UpsertPayloadParams{
+				EntityKey:         key,
+				Payload:           latestPayload.Payload,
+				ContentType:       latestPayload.ContentType,
+				StringAttributes:  latestPayload.StringAttributes,
+				NumericAttributes: store.NewNumericAttributes(numericAttributes),
+			})
+			if err != nil {
+				return fmt.Errorf("failed to insert payload at block %d txIndex %d opIndex %d: %w", block.Number, operation.TxIndex, operation.OpIndex, err)
+			}
+
+			nbo := newNumericBitmapOps(st)
+
+			err = nbo.Remove(ctx, "$expiration", oldExpiration, id)
+			if err != nil {
+				return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
+			}
+
+			err = nbo.Add(ctx, "$expiration", newToBlock, id)
+			if err != nil {
+				return fmt.Errorf("failed to add numeric attribute value bitmap: %w", err)
+			}
+
+		case operation.ChangeOwner != nil:
+			ownerChanges++
+			key := operation.ChangeOwner.Key.Bytes()
+
+			latestPayload, err := st.GetPayloadForEntityKey(ctx, key)
+			if err != nil {
+				return fmt.Errorf("failed to get latest payload: %w", err)
+			}
+
+			stringAttributes := latestPayload.StringAttributes
+
+			oldOwner := stringAttributes.Values["$owner"]
+
+			newOwner := strings.ToLower(operation.ChangeOwner.Owner.Hex())
+
+			stringAttributes.Values["$owner"] = newOwner
+
+			id, err := st.UpsertPayload(
+				ctx,
+				store.UpsertPayloadParams{
+					EntityKey:         key,
+					Payload:           latestPayload.Payload,
+					ContentType:       latestPayload.ContentType,
+					StringAttributes:  stringAttributes,
+					NumericAttributes: latestPayload.NumericAttributes,
+				},
+			)
+			if err != nil {
+				return fmt.Errorf("failed to insert payload at block %d txIndex %d opIndex %d: %w", block.Number, operation.TxIndex, operation.OpIndex, err)
+			}
+
+			sbo := newStringBitmapOps(st)
+
+			err = sbo.Remove(ctx, "$owner", oldOwner, id)
+			if err != nil {
+				return fmt.Errorf("failed to remove string attribute value bitmap for owner: %w", err)
+			}
+
+			err = sbo.Add(ctx, "$owner", newOwner, id)
+			if err != nil {
+				return fmt.Errorf("failed to add string attribute value bitmap for owner: %w", err)
+			}
+
+		default:
+			return fmt.Errorf("unknown operation: %v", operation)
+		}
+
+	}
+
+	s.log.Info("block updated", "block", block.Number, "creates", creates, "updates", updates, "deletes", deletes, "extends", extends, "ownerChanges", ownerChanges)
+
+	err = st.UpsertLastBlock(ctx, block.Number)
+	if err != nil {
+		return fmt.Errorf("failed to upsert last block: %w", err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	if err := s.historicTxPool.AddPoolAtBlock(); err != nil {
+		return fmt.Errorf("error adding historic read transaction: %w", err)
+	}
+
+	return nil
+}
+
+func (s *SQLiteStore) ReadTransaction(ctx context.Context, atBlock uint64, fn func(q *store.Queries) error) error {
+	tx, err := s.historicTxPool.GetTransaction(ctx, atBlock)
+	if err != nil {
+		return fmt.Errorf("error obtaining historic read transaction: %w", err)
+	}
+	// TODO handle errors
+	defer tx.Close()
+
+	return fn(store.New(tx))
 }
