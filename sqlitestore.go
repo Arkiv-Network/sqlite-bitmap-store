@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/Arkiv-Network/sqlite-bitmap-store/store"
 	"github.com/ethereum/go-ethereum/common"
@@ -103,6 +104,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 	for batch := range iterator {
 		if batch.Error != nil {
 			return fmt.Errorf("failed to follow events: %w", batch.Error)
+
 		}
 
 		err := func() error {
@@ -128,6 +130,8 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 			}
 
 			cache := newBitmapCache(st)
+
+			startTime := time.Now()
 
 		mainLoop:
 			for _, block := range batch.Batch.Blocks {
@@ -458,6 +462,8 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 			if err != nil {
 				return fmt.Errorf("failed to commit transaction: %w", err)
 			}
+
+			s.log.Info("batch processed", "firstBlock", firstBlock, "lastBlock", lastBlock, "processingTime", time.Since(startTime))
 
 			return nil
 		}()
