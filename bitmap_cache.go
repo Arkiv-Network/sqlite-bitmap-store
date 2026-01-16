@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"runtime"
 
 	"github.com/Arkiv-Network/sqlite-bitmap-store/store"
+	"golang.org/x/sync/errgroup"
 )
 
 type nameValue[T any] struct {
@@ -121,6 +123,36 @@ func (c *bitmapCache) RemoveFromNumericBitmap(ctx context.Context, name string, 
 }
 
 func (c *bitmapCache) Flush(ctx context.Context) (err error) {
+
+	eg := &errgroup.Group{}
+
+	eg.SetLimit(runtime.NumCPU())
+
+	for _, bitmap := range c.stringBitmaps {
+		if bitmap.IsEmpty() {
+			continue
+		}
+		eg.Go(func() error {
+			bitmap.RunOptimize()
+			return nil
+		})
+	}
+
+	for _, bitmap := range c.numericBitmaps {
+		if bitmap.IsEmpty() {
+			continue
+		}
+		eg.Go(func() error {
+			bitmap.RunOptimize()
+			return nil
+		})
+	}
+
+	err = eg.Wait()
+	if err != nil {
+		return fmt.Errorf("failed to run optimize: %w", err)
+	}
+
 	for k, bitmap := range c.stringBitmaps {
 
 		if bitmap.IsEmpty() {
@@ -130,8 +162,6 @@ func (c *bitmapCache) Flush(ctx context.Context) (err error) {
 			}
 			continue
 		}
-
-		bitmap.RunOptimize()
 
 		err = c.st.UpsertStringAttributeValueBitmap(ctx, store.UpsertStringAttributeValueBitmapParams{Name: k.name, Value: k.value, Bitmap: bitmap})
 		if err != nil {
@@ -148,8 +178,6 @@ func (c *bitmapCache) Flush(ctx context.Context) (err error) {
 			}
 			continue
 		}
-
-		bitmap.RunOptimize()
 
 		err = c.st.UpsertNumericAttributeValueBitmap(ctx, store.UpsertNumericAttributeValueBitmapParams{Name: k.name, Value: k.value, Bitmap: bitmap})
 		if err != nil {
