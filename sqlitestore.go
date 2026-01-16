@@ -104,8 +104,13 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 	for batch := range iterator {
 		if batch.Error != nil {
 			return fmt.Errorf("failed to follow events: %w", batch.Error)
-
 		}
+
+		totalCreates := 0
+		totalUpdates := 0
+		totalDeletes := 0
+		totalExtends := 0
+		totalOwnerChanges := 0
 
 		err := func() error {
 
@@ -445,7 +450,11 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 				}
 
 				s.log.Info("block updated", "block", block.Number, "creates", creates, "updates", updates, "deletes", deletes, "extends", extends, "ownerChanges", ownerChanges)
-
+				totalCreates += creates
+				totalUpdates += updates
+				totalDeletes += deletes
+				totalExtends += extends
+				totalOwnerChanges += ownerChanges
 			}
 
 			err = st.UpsertLastBlock(ctx, lastBlock)
@@ -463,7 +472,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 				return fmt.Errorf("failed to commit transaction: %w", err)
 			}
 
-			s.log.Info("batch processed", "firstBlock", firstBlock, "lastBlock", lastBlock, "processingTime", time.Since(startTime))
+			s.log.Info("batch processed", "firstBlock", firstBlock, "lastBlock", lastBlock, "processingTime", time.Since(startTime).Milliseconds(), "creates", totalCreates, "updates", totalUpdates, "deletes", totalDeletes, "extends", totalExtends, "ownerChanges", totalOwnerChanges)
 
 			return nil
 		}()
