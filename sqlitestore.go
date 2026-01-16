@@ -24,9 +24,10 @@ import (
 )
 
 type SQLiteStore struct {
-	writePool *sql.DB
-	readPool  *sql.DB
-	log       *slog.Logger
+	writePool      *sql.DB
+	readPool       *sql.DB
+	historicTxPool *HistoricTransactionPool
+	log            *slog.Logger
 }
 
 func NewSQLiteStore(
@@ -40,20 +41,47 @@ func NewSQLiteStore(
 		return nil, fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	writeURL := fmt.Sprintf("file:%s?mode=rwc&_busy_timeout=11000&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true&_txlock=immediate&_cache_size=65536", dbPath)
+	writeURL := strings.Join(
+		[]string{
+			"file:",
+			dbPath,
+			"?mode=rwc",
+			"&_busy_timeout=11000",
+			"&_journal_mode=WAL",
+			"&_wal_autocheckpoint=0",
+			"&_auto_vacuum=incremental",
+			"&_foreign_keys=true",
+			"&_txlock=immediate",
+			"&_cache_size=65536",
+		},
+		"",
+	)
 
 	writePool, err := sql.Open("sqlite3", writeURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open write pool: %w", err)
 	}
 
-	readURL := fmt.Sprintf("file:%s?_query_only=true&_busy_timeout=11000&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true&_txlock=deferred&_cache_size=65536", dbPath)
+	readURL := strings.Join(
+		[]string{
+			"file:",
+			dbPath,
+			"?_query_only=true",
+			"&_busy_timeout=11000",
+			"&_journal_mode=WAL",
+			"&_wal_autocheckpoint=0",
+			"&_auto_vacuum=incremental",
+			"&_foreign_keys=true",
+			"&_txlock=deferred",
+			"&_cache_size=65536",
+		},
+		"",
+	)
 	readPool, err := sql.Open("sqlite3", readURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open read pool: %w", err)
 	}
 
-	readPool.SetMaxOpenConns(numberOfReadThreads)
 	readPool.SetMaxIdleConns(numberOfReadThreads)
 	readPool.SetConnMaxLifetime(0)
 	readPool.SetConnMaxIdleTime(0)
@@ -65,7 +93,12 @@ func NewSQLiteStore(
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
-	return &SQLiteStore{writePool: writePool, readPool: readPool, log: log}, nil
+	return &SQLiteStore{
+		writePool:      writePool,
+		readPool:       readPool,
+		historicTxPool: NewHistoricTransactionPool(readPool, log),
+		log:            log,
+	}, nil
 }
 
 func runMigrations(db *sql.DB) error {
@@ -96,6 +129,7 @@ func (s *SQLiteStore) Close() error {
 }
 
 func (s *SQLiteStore) GetLastBlock(ctx context.Context) (uint64, error) {
+	// TODO shouldn't this use the read pool??
 	return store.New(s.writePool).GetLastBlock(ctx)
 }
 
@@ -112,45 +146,50 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 		totalExtends := 0
 		totalOwnerChanges := 0
 
-		err := func() error {
+		firstBlock := batch.Batch.Blocks[0].Number
+		lastBlock := batch.Batch.Blocks[len(batch.Batch.Blocks)-1].Number
+		s.log.Info("new batch", "firstBlock", firstBlock, "lastBlock", lastBlock)
 
-			tx, err := s.writePool.BeginTx(ctx, &sql.TxOptions{
-				Isolation: sql.LevelSerializable,
-				ReadOnly:  false,
-			})
-			if err != nil {
-				return fmt.Errorf("failed to begin transaction: %w", err)
-			}
-			defer tx.Rollback()
+		lastBlockFromDB, err := s.GetLastBlock(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get last block from database: %w", err)
+		}
 
-			st := store.New(tx)
+		startTime := time.Now()
 
-			firstBlock := batch.Batch.Blocks[0].Number
-			lastBlock := batch.Batch.Blocks[len(batch.Batch.Blocks)-1].Number
-			s.log.Info("new batch", "firstBlock", firstBlock, "lastBlock", lastBlock)
-
-			lastBlockFromDB, err := st.GetLastBlock(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to get last block from database: %w", err)
+	mainLoop:
+		for _, block := range batch.Batch.Blocks {
+			if block.Number <= uint64(lastBlockFromDB) {
+				s.log.Info("skipping block", "block", block.Number, "lastBlockFromDB", lastBlockFromDB)
+				continue mainLoop
 			}
 
-			cache := newBitmapCache(st)
+			err := func() (err error) {
+				tx, err := s.writePool.BeginTx(ctx, &sql.TxOptions{
+					Isolation: sql.LevelSerializable,
+					ReadOnly:  false,
+				})
+				if err != nil {
+					return fmt.Errorf("failed to begin transaction: %w", err)
+				}
+				defer func() {
+					var e1 error
+					if e := tx.Rollback(); e != nil && !errors.Is(e, sql.ErrTxDone) {
+						e1 = e
+					}
+					_, e2 := s.writePool.Exec("PRAGMA wal_checkpoint(PASSIVE)")
+					err = errors.Join(err, e1, e2)
+				}()
 
-			startTime := time.Now()
+				st := store.New(tx)
 
-		mainLoop:
-			for _, block := range batch.Batch.Blocks {
+				cache := newBitmapCache(st)
 
 				updates := 0
 				deletes := 0
 				extends := 0
 				creates := 0
 				ownerChanges := 0
-
-				if block.Number <= uint64(lastBlockFromDB) {
-					s.log.Info("skipping block", "block", block.Number, "lastBlockFromDB", lastBlockFromDB)
-					continue mainLoop
-				}
 
 				updatesMap := map[common.Hash][]*events.OPUpdate{}
 
@@ -162,14 +201,12 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 					}
 				}
 
-				// blockNumber := block.Number
 			operationLoop:
 				for _, operation := range block.Operations {
 
 					switch {
 
 					case operation.Create != nil:
-						// expiresAtBlock := blockNumber + operation.Create.BTL
 						creates++
 						key := operation.Create.Key
 
@@ -294,8 +331,6 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 								return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
 							}
 						}
-
-						// TODO: delete entity from the indexes
 
 						for k, v := range stringAttributes {
 							err = cache.AddToStringBitmap(ctx, k, v, id)
@@ -455,66 +490,51 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 				totalDeletes += deletes
 				totalExtends += extends
 				totalOwnerChanges += ownerChanges
-			}
 
-			err = st.UpsertLastBlock(ctx, lastBlock)
+				err = cache.Flush(ctx)
+				if err != nil {
+					return fmt.Errorf("failed to flush bitmap cache: %w", err)
+				}
+
+				err = st.UpsertLastBlock(ctx, block.Number)
+				if err != nil {
+					return fmt.Errorf("failed to upsert last block: %w", err)
+				}
+
+				if err := s.historicTxPool.CommitTxAndCreatePoolAtBlock(block.Number, tx); err != nil {
+					return fmt.Errorf("error adding historic read transaction: %w", err)
+				}
+
+				return
+			}()
+
 			if err != nil {
-				return fmt.Errorf("failed to upsert last block: %w", err)
+				return fmt.Errorf("failed to process block: %w", err)
 			}
-
-			err = cache.Flush(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to flush bitmap cache: %w", err)
-			}
-
-			err = tx.Commit()
-			if err != nil {
-				return fmt.Errorf("failed to commit transaction: %w", err)
-			}
-
-			s.log.Info("batch processed", "firstBlock", firstBlock, "lastBlock", lastBlock, "processingTime", time.Since(startTime).Milliseconds(), "creates", totalCreates, "updates", totalUpdates, "deletes", totalDeletes, "extends", totalExtends, "ownerChanges", totalOwnerChanges)
-
-			return nil
-		}()
-		if err != nil {
-			return err
 		}
+
+		s.log.Info("batch processed", "firstBlock", firstBlock, "lastBlock", lastBlock, "processingTime", time.Since(startTime).Milliseconds(), "creates", totalCreates, "updates", totalUpdates, "deletes", totalDeletes, "extends", totalExtends, "ownerChanges", totalOwnerChanges)
+
 	}
 
 	return nil
 }
 
-func (s *SQLiteStore) NewQueries() *store.Queries {
-	return store.New(s.readPool)
-}
-
-func (s *SQLiteStore) ReadTransaction(ctx context.Context, fn func(q *store.Queries) error) error {
-	tx, err := s.readPool.BeginTx(ctx, &sql.TxOptions{
-		ReadOnly: true,
-	})
+func (s *SQLiteStore) ReadTransaction(ctx context.Context, atBlock uint64, fn func(q *store.Queries) error) (err error) {
+	tx, err := s.historicTxPool.GetTransaction(ctx, atBlock)
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+		return fmt.Errorf("failed to obtain a read transaction: %w", err)
 	}
-	defer tx.Rollback()
+	if tx.AtBlock() != atBlock {
+		return fmt.Errorf("failed to obtain a read transaction for the right block, got %d, expected %d", tx.AtBlock(), atBlock)
+	}
+
+	defer func() {
+		err = errors.Join(err, tx.Close())
+	}()
 
 	st := store.New(tx)
 
-	return fn(st)
-}
-
-func (s *SQLiteStore) GetNumberOfEntities(ctx context.Context) (numberOfEntities uint64, err error) {
-	err = s.ReadTransaction(ctx, func(q *store.Queries) error {
-		ni, err := q.GetNumberOfEntities(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get number of entities: %w", err)
-		}
-		numberOfEntities = uint64(ni)
-		return nil
-	})
-
-	if err != nil {
-		return 0, err
-	}
-
-	return numberOfEntities, nil
+	err = fn(st)
+	return
 }
