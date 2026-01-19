@@ -538,3 +538,21 @@ func (s *SQLiteStore) ReadTransaction(ctx context.Context, atBlock uint64, fn fu
 	err = fn(st)
 	return
 }
+
+func (s *SQLiteStore) GetNumberOfEntities(ctx context.Context) (uint64, error) {
+	count := uint64(0)
+	block, err := s.GetLastBlock(ctx)
+	if err != nil {
+		return count, err
+	}
+	s.ReadTransaction(ctx, block, func(q *store.Queries) error {
+		c, err := q.GetNumberOfEntities(ctx)
+		if err != nil {
+			return err
+		}
+		count = uint64(c)
+		return nil
+	})
+
+	return count, nil
+}
