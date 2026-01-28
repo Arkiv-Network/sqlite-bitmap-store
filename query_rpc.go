@@ -113,19 +113,21 @@ func (s *SQLiteStore) QueryEntities(
 	options *Options,
 ) (*QueryResponse, error) {
 
+	// TODO: wait for the block height
+
 	res := &QueryResponse{
 		Data:        []json.RawMessage{},
-		BlockNumber: options.GetAtBlock(),
+		BlockNumber: 0,
 		Cursor:      nil,
 	}
 
 	{
-		store := store.New(s.readPool)
+		q := s.NewQueries()
 		timeoutCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		defer cancel()
 
 		for {
-			lastBlock, err := store.GetLastBlock(ctx)
+			lastBlock, err := q.GetLastBlock(ctx)
 			if err != nil {
 				return nil, fmt.Errorf("error getting last block: %w", err)
 			}
@@ -134,7 +136,7 @@ func (s *SQLiteStore) QueryEntities(
 			}
 			select {
 			case <-timeoutCtx.Done():
-				return nil, fmt.Errorf("timeout waiting for block %d, found block %d, %w", options.GetAtBlock(), lastBlock, timeoutCtx.Err())
+				return nil, fmt.Errorf("context cancelled: %w", ctx.Err())
 			case <-time.After(100 * time.Millisecond):
 				continue
 			}
@@ -147,7 +149,7 @@ func (s *SQLiteStore) QueryEntities(
 		return nil, fmt.Errorf("error parsing query: %w", err)
 	}
 
-	err = s.ReadTransaction(ctx, options.GetAtBlock(), func(queries *store.Queries) error {
+	err = s.ReadTransaction(ctx, func(queries *store.Queries) error {
 
 		bitmap, err := q.Evaluate(
 			ctx,

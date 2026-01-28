@@ -124,7 +124,7 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(lastBlock).To(Equal(uint64(101)))
 
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				// Query by string attribute: type = "document"
 				docBitmap, err := q.EvaluateStringAttributeValueEqual(ctx, store.EvaluateStringAttributeValueEqualParams{
 					Name:  "type",
@@ -305,11 +305,8 @@ var _ = Describe("SQLiteStore", func() {
 			err = sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(updateIterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err := sqlStore.GetLastBlock(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
 			// Verify the update
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).NotTo(HaveOccurred())
 
@@ -386,11 +383,8 @@ var _ = Describe("SQLiteStore", func() {
 			err := sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(createIterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err := sqlStore.GetLastBlock(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
 			// Verify entity exists
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				_, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).NotTo(HaveOccurred())
 				return nil
@@ -424,11 +418,8 @@ var _ = Describe("SQLiteStore", func() {
 			err = sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(deleteIterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err = sqlStore.GetLastBlock(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
 			// Verify entity is deleted
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				_, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).To(HaveOccurred())
 
@@ -513,11 +504,8 @@ var _ = Describe("SQLiteStore", func() {
 			err = sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(expireIterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err := sqlStore.GetLastBlock(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
 			// Verify entity is expired (deleted)
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				_, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).To(HaveOccurred())
 				return nil
@@ -565,12 +553,9 @@ var _ = Describe("SQLiteStore", func() {
 			err := sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(createIterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err := sqlStore.GetLastBlock(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
 			// Verify original expiration
 			var originalExpiration uint64
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).NotTo(HaveOccurred())
 				originalExpiration = row.NumericAttributes.Values["$expiration"]
@@ -608,11 +593,8 @@ var _ = Describe("SQLiteStore", func() {
 			err = sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(extendIterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err = sqlStore.GetLastBlock(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
 			// Verify extended expiration
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).NotTo(HaveOccurred())
 				newExpiration := row.NumericAttributes.Values["$expiration"]
@@ -680,11 +662,8 @@ var _ = Describe("SQLiteStore", func() {
 			err := sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(createIterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err := sqlStore.GetLastBlock(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
 			// Verify original owner
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(row.StringAttributes.Values["$owner"]).To(Equal(strings.ToLower(originalOwner.Hex())))
@@ -722,11 +701,8 @@ var _ = Describe("SQLiteStore", func() {
 			err = sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(changeOwnerIterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err = sqlStore.GetLastBlock(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
 			// Verify new owner and creator preserved
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(row.StringAttributes.Values["$owner"]).To(Equal(strings.ToLower(newOwner.Hex())))
@@ -837,11 +813,8 @@ var _ = Describe("SQLiteStore", func() {
 			err = sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(updateIterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err := sqlStore.GetLastBlock(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
 			// Verify the update was applied
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(row.Payload).To(Equal([]byte("final update")))
@@ -950,12 +923,9 @@ var _ = Describe("SQLiteStore", func() {
 			err = sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(updateIterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err := sqlStore.GetLastBlock(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
 			// With `continue operationLoop`, non-last updates are skipped but processing
 			// continues to the next operation. The last update for the key is applied.
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).NotTo(HaveOccurred())
 				// The last update (second one) should be applied
@@ -1041,11 +1011,8 @@ var _ = Describe("SQLiteStore", func() {
 			err = sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(replayIterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err := sqlStore.GetLastBlock(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
 			// Verify original content is preserved
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(row.Payload).To(Equal([]byte("original")))
@@ -1109,10 +1076,7 @@ var _ = Describe("SQLiteStore", func() {
 			err := sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err := sqlStore.GetLastBlock(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).NotTo(HaveOccurred())
 

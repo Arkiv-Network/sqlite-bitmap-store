@@ -98,7 +98,7 @@ var _ = Describe("PushIterator", func() {
 
 			var payload []byte
 			var contentType string
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
 				if err != nil {
 					return err
@@ -173,7 +173,7 @@ var _ = Describe("PushIterator", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(lastBlock).To(Equal(uint64(101)))
 
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				row1, err := q.GetPayloadForEntityKey(ctx, key1.Bytes())
 				if err != nil {
 					return err
@@ -262,10 +262,7 @@ var _ = Describe("PushIterator", func() {
 			err = sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(updateIterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err := sqlStore.GetLastBlock(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
 				if err != nil {
 					return err
@@ -343,10 +340,7 @@ var _ = Describe("PushIterator", func() {
 			err = sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(deleteIterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err := sqlStore.GetLastBlock(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				_, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).To(HaveOccurred())
 				return nil
@@ -392,11 +386,8 @@ var _ = Describe("PushIterator", func() {
 			err := sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err := sqlStore.GetLastBlock(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
 			var originalExpiration uint64
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
 				if err != nil {
 					return err
@@ -436,10 +427,7 @@ var _ = Describe("PushIterator", func() {
 			err = sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(extendIterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err = sqlStore.GetLastBlock(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
 				if err != nil {
 					return err
@@ -490,10 +478,7 @@ var _ = Describe("PushIterator", func() {
 			err := sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err := sqlStore.GetLastBlock(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
 				if err != nil {
 					return err
@@ -532,10 +517,7 @@ var _ = Describe("PushIterator", func() {
 			err = sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(changeOwnerIterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err = sqlStore.GetLastBlock(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
 				if err != nil {
 					return err
@@ -614,7 +596,7 @@ var _ = Describe("PushIterator", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(lastBlock).To(Equal(uint64(101)))
 
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				row1, err := q.GetPayloadForEntityKey(ctx, key1.Bytes())
 				if err != nil {
 					return err
@@ -703,10 +685,7 @@ var _ = Describe("PushIterator", func() {
 			err = sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(replayIterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err := sqlStore.GetLastBlock(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
 				if err != nil {
 					return err
@@ -755,10 +734,7 @@ var _ = Describe("PushIterator", func() {
 			err := sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err := sqlStore.GetLastBlock(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			err = sqlStore.ReadTransaction(ctx, lastBlock, func(q *store.Queries) error {
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
 				if err != nil {
 					return err
