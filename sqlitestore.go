@@ -374,12 +374,12 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 						oldNumericAttributes := latestPayload.NumericAttributes
 
-						newToBlock := block.Number + operation.ExtendBTL.BTL
+						oldExpiration := oldNumericAttributes.Values["$expiration"]
+
+						newToBlock := oldExpiration + operation.ExtendBTL.BTL
 
 						numericAttributes := maps.Clone(oldNumericAttributes.Values)
 						numericAttributes["$expiration"] = uint64(newToBlock)
-
-						oldExpiration := oldNumericAttributes.Values["$expiration"]
 
 						id, err := st.UpsertPayload(ctx, store.UpsertPayloadParams{
 							EntityKey:         key,
