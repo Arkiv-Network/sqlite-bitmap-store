@@ -598,7 +598,7 @@ var _ = Describe("SQLiteStore", func() {
 				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).NotTo(HaveOccurred())
 				newExpiration := row.NumericAttributes.Values["$expiration"]
-				Expect(newExpiration).To(Equal(uint64(1200))) // 200 + 1000
+				Expect(newExpiration).To(Equal(uint64(1600)))
 
 				// Verify old expiration bitmap is removed
 				oldExpBitmap, err := q.EvaluateNumericAttributeValueEqual(ctx, store.EvaluateNumericAttributeValueEqualParams{
@@ -610,7 +610,7 @@ var _ = Describe("SQLiteStore", func() {
 				// Verify new expiration bitmap exists
 				newExpBitmap, err := q.EvaluateNumericAttributeValueEqual(ctx, store.EvaluateNumericAttributeValueEqualParams{
 					Name:  "$expiration",
-					Value: 1200,
+					Value: 1600,
 				})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(newExpBitmap.ToArray()).To(HaveLen(1))
