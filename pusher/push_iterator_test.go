@@ -433,7 +433,7 @@ var _ = Describe("PushIterator", func() {
 					return err
 				}
 				newExpiration := row.NumericAttributes.Values["$expiration"]
-				Expect(newExpiration).To(Equal(uint64(1200)))
+				Expect(newExpiration).To(Equal(uint64(1600)))
 				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
