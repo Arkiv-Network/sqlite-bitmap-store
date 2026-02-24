@@ -11,8 +11,7 @@ import (
 )
 
 const evaluateAll = `-- name: EvaluateAll :many
-SELECT id FROM payloads
-ORDER BY id DESC
+SELECT id FROM payloads ORDER BY id DESC
 `
 
 func (q *Queries) EvaluateAll(ctx context.Context) ([]uint64, error) {
@@ -39,8 +38,12 @@ func (q *Queries) EvaluateAll(ctx context.Context) ([]uint64, error) {
 }
 
 const evaluateNumericAttributeValueEqual = `-- name: EvaluateNumericAttributeValueEqual :one
-SELECT bitmap FROM numeric_attributes_values_bitmaps
-WHERE name = ?1 AND value = ?2
+SELECT bitmap
+FROM
+    numeric_attributes_values_bitmaps
+WHERE
+    name = ?
+    AND value = ?
 `
 
 type EvaluateNumericAttributeValueEqualParams struct {
@@ -56,8 +59,12 @@ func (q *Queries) EvaluateNumericAttributeValueEqual(ctx context.Context, arg Ev
 }
 
 const evaluateNumericAttributeValueGreaterOrEqualThan = `-- name: EvaluateNumericAttributeValueGreaterOrEqualThan :many
-SELECT bitmap FROM numeric_attributes_values_bitmaps
-WHERE name = ?1 AND value >= ?2
+SELECT bitmap
+FROM
+    numeric_attributes_values_bitmaps
+WHERE
+    name = ?
+    AND value >= ?
 `
 
 type EvaluateNumericAttributeValueGreaterOrEqualThanParams struct {
@@ -89,8 +96,12 @@ func (q *Queries) EvaluateNumericAttributeValueGreaterOrEqualThan(ctx context.Co
 }
 
 const evaluateNumericAttributeValueGreaterThan = `-- name: EvaluateNumericAttributeValueGreaterThan :many
-SELECT bitmap FROM numeric_attributes_values_bitmaps
-WHERE name = ?1 AND value > ?2
+SELECT bitmap
+FROM
+    numeric_attributes_values_bitmaps
+WHERE
+    name = ?
+    AND value > ?
 `
 
 type EvaluateNumericAttributeValueGreaterThanParams struct {
@@ -122,8 +133,12 @@ func (q *Queries) EvaluateNumericAttributeValueGreaterThan(ctx context.Context, 
 }
 
 const evaluateNumericAttributeValueInclusion = `-- name: EvaluateNumericAttributeValueInclusion :many
-SELECT bitmap FROM numeric_attributes_values_bitmaps
-WHERE name = ?1 AND value IN (/*SLICE:values*/?)
+SELECT bitmap
+FROM
+    numeric_attributes_values_bitmaps
+WHERE
+    name = ?
+    AND value IN (/*SLICE:values*/?)
 `
 
 type EvaluateNumericAttributeValueInclusionParams struct {
@@ -166,8 +181,12 @@ func (q *Queries) EvaluateNumericAttributeValueInclusion(ctx context.Context, ar
 }
 
 const evaluateNumericAttributeValueLessOrEqualThan = `-- name: EvaluateNumericAttributeValueLessOrEqualThan :many
-SELECT bitmap FROM numeric_attributes_values_bitmaps
-WHERE name = ?1 AND value <= ?2
+SELECT bitmap
+FROM
+    numeric_attributes_values_bitmaps
+WHERE
+    name = ?
+    AND value <= ?
 `
 
 type EvaluateNumericAttributeValueLessOrEqualThanParams struct {
@@ -199,8 +218,12 @@ func (q *Queries) EvaluateNumericAttributeValueLessOrEqualThan(ctx context.Conte
 }
 
 const evaluateNumericAttributeValueLowerThan = `-- name: EvaluateNumericAttributeValueLowerThan :many
-SELECT bitmap FROM numeric_attributes_values_bitmaps
-WHERE name = ?1 AND value < ?2
+SELECT bitmap
+FROM
+    numeric_attributes_values_bitmaps
+WHERE
+    name = ?
+    AND value < ?
 `
 
 type EvaluateNumericAttributeValueLowerThanParams struct {
@@ -232,8 +255,12 @@ func (q *Queries) EvaluateNumericAttributeValueLowerThan(ctx context.Context, ar
 }
 
 const evaluateNumericAttributeValueNotEqual = `-- name: EvaluateNumericAttributeValueNotEqual :many
-SELECT bitmap FROM numeric_attributes_values_bitmaps
-WHERE name = ?1 AND value != ?2
+SELECT bitmap
+FROM
+    numeric_attributes_values_bitmaps
+WHERE
+    name = ?
+    AND value != ?
 `
 
 type EvaluateNumericAttributeValueNotEqualParams struct {
@@ -265,8 +292,12 @@ func (q *Queries) EvaluateNumericAttributeValueNotEqual(ctx context.Context, arg
 }
 
 const evaluateNumericAttributeValueNotInclusion = `-- name: EvaluateNumericAttributeValueNotInclusion :many
-SELECT bitmap FROM numeric_attributes_values_bitmaps
-WHERE name = ?1 AND value NOT IN (/*SLICE:values*/?)
+SELECT bitmap
+FROM
+    numeric_attributes_values_bitmaps
+WHERE
+    name = ?
+    AND value NOT IN(/*SLICE:values*/?)
 `
 
 type EvaluateNumericAttributeValueNotInclusionParams struct {
@@ -309,8 +340,12 @@ func (q *Queries) EvaluateNumericAttributeValueNotInclusion(ctx context.Context,
 }
 
 const evaluateStringAttributeValueEqual = `-- name: EvaluateStringAttributeValueEqual :one
-SELECT bitmap FROM string_attributes_values_bitmaps
-WHERE name = ?1 AND value = ?2
+SELECT bitmap
+FROM
+    string_attributes_values_bitmaps
+WHERE
+    name = ?
+    AND value = ?
 `
 
 type EvaluateStringAttributeValueEqualParams struct {
@@ -326,13 +361,17 @@ func (q *Queries) EvaluateStringAttributeValueEqual(ctx context.Context, arg Eva
 }
 
 const evaluateStringAttributeValueGlob = `-- name: EvaluateStringAttributeValueGlob :many
-SELECT bitmap FROM string_attributes_values_bitmaps
-WHERE name = ?1 AND value GLOB ?2
+SELECT bitmap
+FROM
+    string_attributes_values_bitmaps
+WHERE
+    name = ?
+    AND value LIKE CONCAT('%', ?, '%')
 `
 
 type EvaluateStringAttributeValueGlobParams struct {
 	Name  string
-	Value string
+	Value interface{}
 }
 
 func (q *Queries) EvaluateStringAttributeValueGlob(ctx context.Context, arg EvaluateStringAttributeValueGlobParams) ([]*Bitmap, error) {
@@ -359,8 +398,12 @@ func (q *Queries) EvaluateStringAttributeValueGlob(ctx context.Context, arg Eval
 }
 
 const evaluateStringAttributeValueGreaterOrEqualThan = `-- name: EvaluateStringAttributeValueGreaterOrEqualThan :many
-SELECT bitmap FROM string_attributes_values_bitmaps
-WHERE name = ?1 AND value >= ?2
+SELECT bitmap
+FROM
+    string_attributes_values_bitmaps
+WHERE
+    name = ?
+    AND value >= ?
 `
 
 type EvaluateStringAttributeValueGreaterOrEqualThanParams struct {
@@ -392,8 +435,12 @@ func (q *Queries) EvaluateStringAttributeValueGreaterOrEqualThan(ctx context.Con
 }
 
 const evaluateStringAttributeValueGreaterThan = `-- name: EvaluateStringAttributeValueGreaterThan :many
-SELECT bitmap FROM string_attributes_values_bitmaps
-WHERE name = ?1 AND value > ?2
+SELECT bitmap
+FROM
+    string_attributes_values_bitmaps
+WHERE
+    name = ?
+    AND value > ?
 `
 
 type EvaluateStringAttributeValueGreaterThanParams struct {
@@ -425,8 +472,12 @@ func (q *Queries) EvaluateStringAttributeValueGreaterThan(ctx context.Context, a
 }
 
 const evaluateStringAttributeValueInclusion = `-- name: EvaluateStringAttributeValueInclusion :many
-SELECT bitmap FROM string_attributes_values_bitmaps
-WHERE name = ?1 AND value IN (/*SLICE:values*/?)
+SELECT bitmap
+FROM
+    string_attributes_values_bitmaps
+WHERE
+    name = ?
+    AND value IN (/*SLICE:values*/?)
 `
 
 type EvaluateStringAttributeValueInclusionParams struct {
@@ -469,8 +520,12 @@ func (q *Queries) EvaluateStringAttributeValueInclusion(ctx context.Context, arg
 }
 
 const evaluateStringAttributeValueLessOrEqualThan = `-- name: EvaluateStringAttributeValueLessOrEqualThan :many
-SELECT bitmap FROM string_attributes_values_bitmaps
-WHERE name = ?1 AND value <= ?2
+SELECT bitmap
+FROM
+    string_attributes_values_bitmaps
+WHERE
+    name = ?
+    AND value <= ?
 `
 
 type EvaluateStringAttributeValueLessOrEqualThanParams struct {
@@ -502,8 +557,12 @@ func (q *Queries) EvaluateStringAttributeValueLessOrEqualThan(ctx context.Contex
 }
 
 const evaluateStringAttributeValueLowerThan = `-- name: EvaluateStringAttributeValueLowerThan :many
-SELECT bitmap FROM string_attributes_values_bitmaps
-WHERE name = ?1 AND value < ?2
+SELECT bitmap
+FROM
+    string_attributes_values_bitmaps
+WHERE
+    name = ?
+    AND value < ?
 `
 
 type EvaluateStringAttributeValueLowerThanParams struct {
@@ -535,8 +594,12 @@ func (q *Queries) EvaluateStringAttributeValueLowerThan(ctx context.Context, arg
 }
 
 const evaluateStringAttributeValueNotEqual = `-- name: EvaluateStringAttributeValueNotEqual :many
-SELECT bitmap FROM string_attributes_values_bitmaps
-WHERE name = ?1 AND value != ?2
+SELECT bitmap
+FROM
+    string_attributes_values_bitmaps
+WHERE
+    name = ?
+    AND value != ?
 `
 
 type EvaluateStringAttributeValueNotEqualParams struct {
@@ -568,13 +631,17 @@ func (q *Queries) EvaluateStringAttributeValueNotEqual(ctx context.Context, arg 
 }
 
 const evaluateStringAttributeValueNotGlob = `-- name: EvaluateStringAttributeValueNotGlob :many
-SELECT bitmap FROM string_attributes_values_bitmaps
-WHERE name = ?1 AND value NOT GLOB ?2
+SELECT bitmap
+FROM
+    string_attributes_values_bitmaps
+WHERE
+    name = ?
+    AND value NOT LIKE CONCAT('%', ?, '%')
 `
 
 type EvaluateStringAttributeValueNotGlobParams struct {
 	Name  string
-	Value string
+	Value interface{}
 }
 
 func (q *Queries) EvaluateStringAttributeValueNotGlob(ctx context.Context, arg EvaluateStringAttributeValueNotGlobParams) ([]*Bitmap, error) {
@@ -601,8 +668,12 @@ func (q *Queries) EvaluateStringAttributeValueNotGlob(ctx context.Context, arg E
 }
 
 const evaluateStringAttributeValueNotInclusion = `-- name: EvaluateStringAttributeValueNotInclusion :many
-SELECT bitmap FROM string_attributes_values_bitmaps
-WHERE name = ?1 AND value NOT IN (/*SLICE:values*/?)
+SELECT bitmap
+FROM
+    string_attributes_values_bitmaps
+WHERE
+    name = ?
+    AND value NOT IN(/*SLICE:values*/?)
 `
 
 type EvaluateStringAttributeValueNotInclusionParams struct {

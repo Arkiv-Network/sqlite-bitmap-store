@@ -33,6 +33,12 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.deleteStringAttributeValueBitmapStmt, err = db.PrepareContext(ctx, deleteStringAttributeValueBitmap); err != nil {
 		return nil, fmt.Errorf("error preparing query DeleteStringAttributeValueBitmap: %w", err)
 	}
+	if q.doltAddStmt, err = db.PrepareContext(ctx, doltAdd); err != nil {
+		return nil, fmt.Errorf("error preparing query DoltAdd: %w", err)
+	}
+	if q.doltCommitStmt, err = db.PrepareContext(ctx, doltCommit); err != nil {
+		return nil, fmt.Errorf("error preparing query DoltCommit: %w", err)
+	}
 	if q.evaluateAllStmt, err = db.PrepareContext(ctx, evaluateAll); err != nil {
 		return nil, fmt.Errorf("error preparing query EvaluateAll: %w", err)
 	}
@@ -138,6 +144,16 @@ func (q *Queries) Close() error {
 	if q.deleteStringAttributeValueBitmapStmt != nil {
 		if cerr := q.deleteStringAttributeValueBitmapStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing deleteStringAttributeValueBitmapStmt: %w", cerr)
+		}
+	}
+	if q.doltAddStmt != nil {
+		if cerr := q.doltAddStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing doltAddStmt: %w", cerr)
+		}
+	}
+	if q.doltCommitStmt != nil {
+		if cerr := q.doltCommitStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing doltCommitStmt: %w", cerr)
 		}
 	}
 	if q.evaluateAllStmt != nil {
@@ -327,6 +343,8 @@ type Queries struct {
 	deleteNumericAttributeValueBitmapStmt               *sql.Stmt
 	deletePayloadForEntityKeyStmt                       *sql.Stmt
 	deleteStringAttributeValueBitmapStmt                *sql.Stmt
+	doltAddStmt                                         *sql.Stmt
+	doltCommitStmt                                      *sql.Stmt
 	evaluateAllStmt                                     *sql.Stmt
 	evaluateNumericAttributeValueEqualStmt              *sql.Stmt
 	evaluateNumericAttributeValueGreaterOrEqualThanStmt *sql.Stmt
@@ -365,6 +383,8 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		deleteNumericAttributeValueBitmapStmt:  q.deleteNumericAttributeValueBitmapStmt,
 		deletePayloadForEntityKeyStmt:          q.deletePayloadForEntityKeyStmt,
 		deleteStringAttributeValueBitmapStmt:   q.deleteStringAttributeValueBitmapStmt,
+		doltAddStmt:                            q.doltAddStmt,
+		doltCommitStmt:                         q.doltCommitStmt,
 		evaluateAllStmt:                        q.evaluateAllStmt,
 		evaluateNumericAttributeValueEqualStmt: q.evaluateNumericAttributeValueEqualStmt,
 		evaluateNumericAttributeValueGreaterOrEqualThanStmt: q.evaluateNumericAttributeValueGreaterOrEqualThanStmt,

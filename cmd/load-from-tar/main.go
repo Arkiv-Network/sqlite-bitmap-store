@@ -29,7 +29,7 @@ func main() {
 		Flags: []cli.Flag{
 			&cli.PathFlag{
 				Name:        "db-path",
-				Value:       "arkiv-data.db",
+				Value:       "arkiv-data",
 				Destination: &cfg.dbPath,
 				EnvVars:     []string{"DB_PATH"},
 			},

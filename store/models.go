@@ -5,7 +5,7 @@
 package store
 
 type LastBlock struct {
-	ID    int64
+	ID    int32
 	Block uint64
 }
 

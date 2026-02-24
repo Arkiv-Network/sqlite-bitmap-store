@@ -6,12 +6,15 @@ package store
 
 import (
 	"context"
+	"database/sql"
 )
 
 type Querier interface {
 	DeleteNumericAttributeValueBitmap(ctx context.Context, arg DeleteNumericAttributeValueBitmapParams) error
 	DeletePayloadForEntityKey(ctx context.Context, entityKey []byte) error
 	DeleteStringAttributeValueBitmap(ctx context.Context, arg DeleteStringAttributeValueBitmapParams) error
+	DoltAdd(ctx context.Context) error
+	DoltCommit(ctx context.Context, message interface{}) error
 	EvaluateAll(ctx context.Context) ([]uint64, error)
 	EvaluateNumericAttributeValueEqual(ctx context.Context, arg EvaluateNumericAttributeValueEqualParams) (*Bitmap, error)
 	EvaluateNumericAttributeValueGreaterOrEqualThan(ctx context.Context, arg EvaluateNumericAttributeValueGreaterOrEqualThanParams) ([]*Bitmap, error)
@@ -39,7 +42,7 @@ type Querier interface {
 	RetrievePayloads(ctx context.Context, ids []uint64) ([]RetrievePayloadsRow, error)
 	UpsertLastBlock(ctx context.Context, block uint64) error
 	UpsertNumericAttributeValueBitmap(ctx context.Context, arg UpsertNumericAttributeValueBitmapParams) error
-	UpsertPayload(ctx context.Context, arg UpsertPayloadParams) (uint64, error)
+	UpsertPayload(ctx context.Context, arg UpsertPayloadParams) (sql.Result, error)
 	UpsertStringAttributeValueBitmap(ctx context.Context, arg UpsertStringAttributeValueBitmapParams) error
 }
 

@@ -1,0 +1,1 @@
+INSERT INTO last_block (id, block) VALUES (1, 0);

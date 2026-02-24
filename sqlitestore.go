@@ -13,11 +13,11 @@ import (
 	"time"
 
 	"github.com/Arkiv-Network/sqlite-bitmap-store/store"
+	_ "github.com/dolthub/driver"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/sqlite3"
+	"github.com/golang-migrate/migrate/v4/database/mysql"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
-	_ "github.com/mattn/go-sqlite3"
 
 	arkivevents "github.com/Arkiv-Network/arkiv-events"
 	"github.com/Arkiv-Network/arkiv-events/events"
@@ -35,20 +35,40 @@ func NewSQLiteStore(
 	numberOfReadThreads int,
 ) (*SQLiteStore, error) {
 
-	err := os.MkdirAll(filepath.Dir(dbPath), 0755)
+	absPath, err := filepath.Abs(filepath.Clean(dbPath))
+	if err != nil {
+		return nil, err
+	}
+	dbPath = absPath
+	log.Info("dbPath", "dbPath", dbPath)
+
+	// if exists check if it is a directory
+	if info, err := os.Stat(dbPath); err == nil && !info.IsDir() {
+		return nil, fmt.Errorf("dbPath is not a directory: %w", err)
+	}
+
+	err = os.MkdirAll(dbPath, 0755)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	writeURL := fmt.Sprintf("file:%s?mode=rwc&_busy_timeout=11000&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true&_txlock=immediate&_cache_size=65536", dbPath)
+	//writeURL := fmt.Sprintf("file:%s?mode=rwc&_busy_timeout=11000&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true&_txlock=immediate&_cache_size=65536", dbPath)
+	writeURL := fmt.Sprintf("file://%s?commitname=arkiv&commitemail=arkiv@arkiv.network&database=arkiv", dbPath)
+	log.Info("writeURL", "writeURL", writeURL)
 
-	writePool, err := sql.Open("sqlite3", writeURL)
+	writePool, err := sql.Open("dolt", writeURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open write pool: %w", err)
 	}
+	_, err = writePool.ExecContext(context.Background(), "CREATE DATABASE IF NOT EXISTS arkiv;")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create database: %w", err)
+	}
+	log.Info("database created", "database", "arkiv")
 
-	readURL := fmt.Sprintf("file:%s?_query_only=true&_busy_timeout=11000&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true&_txlock=deferred&_cache_size=65536", dbPath)
-	readPool, err := sql.Open("sqlite3", readURL)
+	readURL := fmt.Sprintf("file://%s?commitname=arkiv&commitemail=arkiv@arkiv.network&database=arkiv", dbPath)
+	log.Info("readURL", "readURL", readURL)
+	readPool, err := sql.Open("dolt", readURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open read pool: %w", err)
 	}
@@ -74,12 +94,12 @@ func runMigrations(db *sql.DB) error {
 		return fmt.Errorf("failed to create migration source: %w", err)
 	}
 
-	dbDriver, err := sqlite3.WithInstance(db, &sqlite3.Config{})
+	dbDriver, err := mysql.WithInstance(db, &mysql.Config{})
 	if err != nil {
 		return fmt.Errorf("failed to create database driver: %w", err)
 	}
 
-	m, err := migrate.NewWithInstance("iofs", sourceDriver, "sqlite3", dbDriver)
+	m, err := migrate.NewWithInstance("iofs", sourceDriver, "mysql", dbDriver)
 	if err != nil {
 		return fmt.Errorf("failed to create migrate instance: %w", err)
 	}
@@ -190,7 +210,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						numericAttributes["$txIndex"] = uint64(operation.TxIndex)
 						numericAttributes["$opIndex"] = uint64(operation.OpIndex)
 
-						id, err := st.UpsertPayload(
+						result, err := st.UpsertPayload(
 							ctx,
 							store.UpsertPayloadParams{
 								EntityKey:         operation.Create.Key.Bytes(),
@@ -204,8 +224,13 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 							return fmt.Errorf("failed to insert payload %s at block %d txIndex %d opIndex %d: %w", key.Hex(), block.Number, operation.TxIndex, operation.OpIndex, err)
 						}
 
+						id, err := result.LastInsertId()
+						if err != nil {
+							return fmt.Errorf("failed to get last insert id: %w", err)
+						}
+
 						for k, v := range stringAttributes {
-							err = cache.AddToStringBitmap(ctx, k, v, id)
+							err = cache.AddToStringBitmap(ctx, k, v, uint64(id))
 							if err != nil {
 								return fmt.Errorf("failed to add string attribute value bitmap: %w", err)
 							}
@@ -219,7 +244,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 								continue
 							}
 
-							err = cache.AddToNumericBitmap(ctx, k, v, id)
+							err = cache.AddToNumericBitmap(ctx, k, v, uint64(id))
 							if err != nil {
 								return fmt.Errorf("failed to add numeric attribute value bitmap: %w", err)
 							}
@@ -261,7 +286,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						numericAttributes["$opIndex"] = oldNumericAttributes.Values["$opIndex"]
 						numericAttributes["$lastModifiedAtBlock"] = uint64(block.Number)
 
-						id, err := st.UpsertPayload(
+						result, err := st.UpsertPayload(
 							ctx,
 							store.UpsertPayloadParams{
 								EntityKey:         key,
@@ -274,9 +299,13 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						if err != nil {
 							return fmt.Errorf("failed to insert payload 0x%x at block %d txIndex %d opIndex %d: %w", key, block.Number, operation.TxIndex, operation.OpIndex, err)
 						}
+						id, err := result.LastInsertId()
+						if err != nil {
+							return fmt.Errorf("failed to get last insert id: %w", err)
+						}
 
 						for k, v := range oldStringAttributes.Values {
-							err = cache.RemoveFromStringBitmap(ctx, k, v, id)
+							err = cache.RemoveFromStringBitmap(ctx, k, v, uint64(id))
 							if err != nil {
 								return fmt.Errorf("failed to remove string attribute value bitmap: %w", err)
 							}
@@ -289,7 +318,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 								continue
 							}
 
-							err = cache.RemoveFromNumericBitmap(ctx, k, v, id)
+							err = cache.RemoveFromNumericBitmap(ctx, k, v, uint64(id))
 							if err != nil {
 								return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
 							}
@@ -298,7 +327,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						// TODO: delete entity from the indexes
 
 						for k, v := range stringAttributes {
-							err = cache.AddToStringBitmap(ctx, k, v, id)
+							err = cache.AddToStringBitmap(ctx, k, v, uint64(id))
 							if err != nil {
 								return fmt.Errorf("failed to add string attribute value bitmap: %w", err)
 							}
@@ -311,7 +340,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 								continue
 							}
 
-							err = cache.AddToNumericBitmap(ctx, k, v, id)
+							err = cache.AddToNumericBitmap(ctx, k, v, uint64(id))
 							if err != nil {
 								return fmt.Errorf("failed to add numeric attribute value bitmap: %w", err)
 							}
@@ -337,7 +366,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						oldNumericAttributes := latestPayload.NumericAttributes
 
 						for k, v := range oldStringAttributes.Values {
-							err = cache.RemoveFromStringBitmap(ctx, k, v, latestPayload.ID)
+							err = cache.RemoveFromStringBitmap(ctx, k, v, uint64(latestPayload.ID))
 							if err != nil {
 								return fmt.Errorf("failed to remove string attribute value bitmap: %w", err)
 							}
@@ -350,7 +379,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 								continue
 							}
 
-							err = cache.RemoveFromNumericBitmap(ctx, k, v, latestPayload.ID)
+							err = cache.RemoveFromNumericBitmap(ctx, k, v, uint64(latestPayload.ID))
 							if err != nil {
 								return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
 							}
@@ -381,7 +410,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						numericAttributes := maps.Clone(oldNumericAttributes.Values)
 						numericAttributes["$expiration"] = uint64(newToBlock)
 
-						id, err := st.UpsertPayload(ctx, store.UpsertPayloadParams{
+						result, err := st.UpsertPayload(ctx, store.UpsertPayloadParams{
 							EntityKey:         key,
 							Payload:           latestPayload.Payload,
 							ContentType:       latestPayload.ContentType,
@@ -392,12 +421,17 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 							return fmt.Errorf("failed to insert payload at block %d txIndex %d opIndex %d: %w", block.Number, operation.TxIndex, operation.OpIndex, err)
 						}
 
-						err = cache.RemoveFromNumericBitmap(ctx, "$expiration", oldExpiration, id)
+						id, err := result.LastInsertId()
+						if err != nil {
+							return fmt.Errorf("failed to get last insert id: %w", err)
+						}
+
+						err = cache.RemoveFromNumericBitmap(ctx, "$expiration", oldExpiration, uint64(id))
 						if err != nil {
 							return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
 						}
 
-						err = cache.AddToNumericBitmap(ctx, "$expiration", newToBlock, id)
+						err = cache.AddToNumericBitmap(ctx, "$expiration", newToBlock, uint64(id))
 						if err != nil {
 							return fmt.Errorf("failed to add numeric attribute value bitmap: %w", err)
 						}
@@ -419,7 +453,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 						stringAttributes.Values["$owner"] = newOwner
 
-						id, err := st.UpsertPayload(
+						result, err := st.UpsertPayload(
 							ctx,
 							store.UpsertPayloadParams{
 								EntityKey:         key,
@@ -433,12 +467,17 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 							return fmt.Errorf("failed to insert payload at block %d txIndex %d opIndex %d: %w", block.Number, operation.TxIndex, operation.OpIndex, err)
 						}
 
-						err = cache.RemoveFromStringBitmap(ctx, "$owner", oldOwner, id)
+						id, err := result.LastInsertId()
+						if err != nil {
+							return fmt.Errorf("failed to get last insert id: %w", err)
+						}
+
+						err = cache.RemoveFromStringBitmap(ctx, "$owner", oldOwner, uint64(id))
 						if err != nil {
 							return fmt.Errorf("failed to remove string attribute value bitmap for owner: %w", err)
 						}
 
-						err = cache.AddToStringBitmap(ctx, "$owner", newOwner, id)
+						err = cache.AddToStringBitmap(ctx, "$owner", newOwner, uint64(id))
 						if err != nil {
 							return fmt.Errorf("failed to add string attribute value bitmap for owner: %w", err)
 						}
@@ -473,6 +512,26 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 			}
 
 			s.log.Info("batch processed", "firstBlock", firstBlock, "lastBlock", lastBlock, "processingTime", time.Since(startTime).Milliseconds(), "creates", totalCreates, "updates", totalUpdates, "deletes", totalDeletes, "extends", totalExtends, "ownerChanges", totalOwnerChanges)
+
+			tx, err = s.writePool.BeginTx(ctx, &sql.TxOptions{
+				Isolation: sql.LevelSerializable,
+				ReadOnly:  false,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to begin transaction: %w", err)
+			}
+			defer tx.Rollback()
+
+			st = store.New(tx)
+			err = st.DoltAdd(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to add to dolt: %w", err)
+			}
+
+			err = st.DoltCommit(ctx, fmt.Sprintf("Batch processed from block %d to %d", firstBlock, lastBlock))
+			if err != nil {
+				return fmt.Errorf("failed to commit dolt: %w", err)
+			}
 
 			return nil
 		}()

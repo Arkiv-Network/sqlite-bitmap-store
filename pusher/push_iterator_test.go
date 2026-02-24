@@ -33,7 +33,7 @@ var _ = Describe("PushIterator", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		logger = slog.New(slog.NewTextHandler(GinkgoWriter, &slog.HandlerOptions{Level: slog.LevelDebug}))
-		dbPath := filepath.Join(tmpDir, "test.db")
+		dbPath := filepath.Join(tmpDir, "test-db")
 
 		sqlStore, err = sqlitebitmapstore.NewSQLiteStore(logger, dbPath, 4)
 		Expect(err).NotTo(HaveOccurred())

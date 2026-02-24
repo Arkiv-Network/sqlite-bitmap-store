@@ -22,9 +22,16 @@ func (q *Queries) GetNumberOfEntities(ctx context.Context) (int64, error) {
 }
 
 const retrievePayloads = `-- name: RetrievePayloads :many
-SELECT entity_key, id, payload, content_type, string_attributes, numeric_attributes
+SELECT
+    entity_key,
+    id,
+    payload,
+    content_type,
+    string_attributes,
+    numeric_attributes
 FROM payloads
-WHERE id IN (/*SLICE:ids*/?)
+WHERE
+    id IN (/*SLICE:ids*/?)
 ORDER BY id DESC
 `
 

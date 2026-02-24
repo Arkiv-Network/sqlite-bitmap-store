@@ -7,11 +7,14 @@ package store
 
 import (
 	"context"
+	"database/sql"
 )
 
 const deleteNumericAttributeValueBitmap = `-- name: DeleteNumericAttributeValueBitmap :exec
 DELETE FROM numeric_attributes_values_bitmaps
-WHERE name = ? AND value = ?
+WHERE
+    name = ?
+    AND value = ?
 `
 
 type DeleteNumericAttributeValueBitmapParams struct {
@@ -25,8 +28,7 @@ func (q *Queries) DeleteNumericAttributeValueBitmap(ctx context.Context, arg Del
 }
 
 const deletePayloadForEntityKey = `-- name: DeletePayloadForEntityKey :exec
-DELETE FROM payloads
-WHERE entity_key = ?
+DELETE FROM payloads WHERE entity_key = ?
 `
 
 func (q *Queries) DeletePayloadForEntityKey(ctx context.Context, entityKey []byte) error {
@@ -36,7 +38,9 @@ func (q *Queries) DeletePayloadForEntityKey(ctx context.Context, entityKey []byt
 
 const deleteStringAttributeValueBitmap = `-- name: DeleteStringAttributeValueBitmap :exec
 DELETE FROM string_attributes_values_bitmaps
-WHERE name = ? AND value = ?
+WHERE
+    name = ?
+    AND value = ?
 `
 
 type DeleteStringAttributeValueBitmapParams struct {
@@ -46,6 +50,24 @@ type DeleteStringAttributeValueBitmapParams struct {
 
 func (q *Queries) DeleteStringAttributeValueBitmap(ctx context.Context, arg DeleteStringAttributeValueBitmapParams) error {
 	_, err := q.exec(ctx, q.deleteStringAttributeValueBitmapStmt, deleteStringAttributeValueBitmap, arg.Name, arg.Value)
+	return err
+}
+
+const doltAdd = `-- name: DoltAdd :exec
+CALL DOLT_ADD ('.')
+`
+
+func (q *Queries) DoltAdd(ctx context.Context) error {
+	_, err := q.exec(ctx, q.doltAddStmt, doltAdd)
+	return err
+}
+
+const doltCommit = `-- name: DoltCommit :exec
+CALL DOLT_COMMIT ('-m', ?)
+`
+
+func (q *Queries) DoltCommit(ctx context.Context, message interface{}) error {
+	_, err := q.exec(ctx, q.doltCommitStmt, doltCommit, message)
 	return err
 }
 
@@ -61,8 +83,12 @@ func (q *Queries) GetLastBlock(ctx context.Context) (uint64, error) {
 }
 
 const getNumericAttributeValueBitmap = `-- name: GetNumericAttributeValueBitmap :one
-SELECT bitmap FROM numeric_attributes_values_bitmaps
-WHERE name = ? AND value = ?
+SELECT bitmap
+FROM
+    numeric_attributes_values_bitmaps
+WHERE
+    name = ?
+    AND value = ?
 `
 
 type GetNumericAttributeValueBitmapParams struct {
@@ -78,9 +104,16 @@ func (q *Queries) GetNumericAttributeValueBitmap(ctx context.Context, arg GetNum
 }
 
 const getPayloadForEntityKey = `-- name: GetPayloadForEntityKey :one
-SELECT entity_key, id, payload, content_type, string_attributes, numeric_attributes
+SELECT
+    entity_key,
+    id,
+    payload,
+    content_type,
+    string_attributes,
+    numeric_attributes
 FROM payloads
-WHERE entity_key = ?
+WHERE
+    entity_key = ?
 `
 
 type GetPayloadForEntityKeyRow struct {
@@ -107,8 +140,12 @@ func (q *Queries) GetPayloadForEntityKey(ctx context.Context, entityKey []byte) 
 }
 
 const getStringAttributeValueBitmap = `-- name: GetStringAttributeValueBitmap :one
-SELECT bitmap FROM string_attributes_values_bitmaps
-WHERE name = ? AND value = ?
+SELECT bitmap
+FROM
+    string_attributes_values_bitmaps
+WHERE
+    name = ?
+    AND value = ?
 `
 
 type GetStringAttributeValueBitmapParams struct {
@@ -124,9 +161,11 @@ func (q *Queries) GetStringAttributeValueBitmap(ctx context.Context, arg GetStri
 }
 
 const upsertLastBlock = `-- name: UpsertLastBlock :exec
-INSERT INTO last_block (id, block)
+INSERT INTO
+    last_block (id, block)
 VALUES (1, ?)
-ON CONFLICT (id) DO UPDATE SET block = EXCLUDED.block
+ON DUPLICATE KEY UPDATE
+    block = VALUES(block)
 `
 
 func (q *Queries) UpsertLastBlock(ctx context.Context, block uint64) error {
@@ -135,9 +174,11 @@ func (q *Queries) UpsertLastBlock(ctx context.Context, block uint64) error {
 }
 
 const upsertNumericAttributeValueBitmap = `-- name: UpsertNumericAttributeValueBitmap :exec
-INSERT INTO numeric_attributes_values_bitmaps (name, value, bitmap)
+INSERT INTO
+    numeric_attributes_values_bitmaps (name, value, bitmap)
 VALUES (?, ?, ?)
-ON CONFLICT (name, value) DO UPDATE SET bitmap = excluded.bitmap
+ON DUPLICATE KEY UPDATE
+    bitmap = VALUES(bitmap)
 `
 
 type UpsertNumericAttributeValueBitmapParams struct {
@@ -151,20 +192,22 @@ func (q *Queries) UpsertNumericAttributeValueBitmap(ctx context.Context, arg Ups
 	return err
 }
 
-const upsertPayload = `-- name: UpsertPayload :one
-INSERT INTO payloads (
-    entity_key,
-    payload,
-    content_type,
-    string_attributes,
-    numeric_attributes
-) VALUES (?, ?, ?, ?, ?)
-ON CONFLICT (entity_key) DO UPDATE SET
-    payload = excluded.payload,
-    content_type = excluded.content_type,
-    string_attributes = excluded.string_attributes,
-    numeric_attributes = excluded.numeric_attributes
-RETURNING id
+const upsertPayload = `-- name: UpsertPayload :execresult
+INSERT INTO
+    payloads (
+        entity_key,
+        payload,
+        content_type,
+        string_attributes,
+        numeric_attributes
+    )
+VALUES (?, ?, ?, ?, ?)
+ON DUPLICATE KEY UPDATE
+    id = LAST_INSERT_ID(id),
+    payload = VALUES(payload),
+    content_type = VALUES(content_type),
+    string_attributes = VALUES(string_attributes),
+    numeric_attributes = VALUES(numeric_attributes)
 `
 
 type UpsertPayloadParams struct {
@@ -175,23 +218,22 @@ type UpsertPayloadParams struct {
 	NumericAttributes *NumericAttributes
 }
 
-func (q *Queries) UpsertPayload(ctx context.Context, arg UpsertPayloadParams) (uint64, error) {
-	row := q.queryRow(ctx, q.upsertPayloadStmt, upsertPayload,
+func (q *Queries) UpsertPayload(ctx context.Context, arg UpsertPayloadParams) (sql.Result, error) {
+	return q.exec(ctx, q.upsertPayloadStmt, upsertPayload,
 		arg.EntityKey,
 		arg.Payload,
 		arg.ContentType,
 		arg.StringAttributes,
 		arg.NumericAttributes,
 	)
-	var id uint64
-	err := row.Scan(&id)
-	return id, err
 }
 
 const upsertStringAttributeValueBitmap = `-- name: UpsertStringAttributeValueBitmap :exec
-INSERT INTO string_attributes_values_bitmaps (name, value, bitmap)
+INSERT INTO
+    string_attributes_values_bitmaps (name, value, bitmap)
 VALUES (?, ?, ?)
-ON CONFLICT (name, value) DO UPDATE SET bitmap = excluded.bitmap
+ON DUPLICATE KEY UPDATE
+    bitmap = VALUES(bitmap)
 `
 
 type UpsertStringAttributeValueBitmapParams struct {
