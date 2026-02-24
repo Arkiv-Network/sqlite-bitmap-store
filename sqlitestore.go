@@ -33,7 +33,9 @@ var (
 	metricDeletes             = metrics.NewRegisteredCounter("arkiv_store/deletes", nil)
 	metricExtends             = metrics.NewRegisteredCounter("arkiv_store/extends", nil)
 	metricOwnerChanges        = metrics.NewRegisteredCounter("arkiv_store/owner_changes", nil)
-	// more responsive
+	// Tracks operation duration (ms) using an exponential decay sample so the histogram
+	// is more responsive to recent performance by weighting newer measurements higher
+	// (sample size 100, alpha 0.4).
 	metricOperationTime = metrics.NewRegisteredHistogram("arkiv_store/operation_time_ms", nil, metrics.NewExpDecaySample(100, 0.4))
 )
 
