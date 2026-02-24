@@ -247,7 +247,6 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 							}
 						}
 					case operation.Update != nil:
-						blockStat.updates++
 
 						updates := updatesMap[operation.Update.Key]
 						lastUpdate := updates[len(updates)-1]
@@ -255,6 +254,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						if operation.Update != lastUpdate {
 							continue operationLoop
 						}
+						blockStat.updates++
 
 						key := operation.Update.Key.Bytes()
 
