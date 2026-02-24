@@ -499,28 +499,28 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 			// Iterate blocks again to preserve order and update metrics per block
 			for _, block := range batch.Batch.Blocks {
-				if s, ok := stats[block.Number]; ok {
-					totalCreates += s.creates
-					totalUpdates += s.updates
-					totalDeletes += s.deletes
-					totalExtends += s.extends
-					totalOwnerChanges += s.ownerChanges
+				if stat, ok := stats[block.Number]; ok {
+					totalCreates += stat.creates
+					totalUpdates += stat.updates
+					totalDeletes += stat.deletes
+					totalExtends += stat.extends
+					totalOwnerChanges += stat.ownerChanges
 
 					// Update metrics specifically per block
-					if s.creates > 0 {
-						metricCreates.Inc(int64(s.creates))
+					if stat.creates > 0 {
+						metricCreates.Inc(int64(stat.creates))
 					}
-					if s.updates > 0 {
-						metricUpdates.Inc(int64(s.updates))
+					if stat.updates > 0 {
+						metricUpdates.Inc(int64(stat.updates))
 					}
-					if s.deletes > 0 {
-						metricDeletes.Inc(int64(s.deletes))
+					if stat.deletes > 0 {
+						metricDeletes.Inc(int64(stat.deletes))
 					}
-					if s.extends > 0 {
-						metricExtends.Inc(int64(s.extends))
+					if stat.extends > 0 {
+						metricExtends.Inc(int64(stat.extends))
 					}
-					if s.ownerChanges > 0 {
-						metricOwnerChanges.Inc(int64(s.ownerChanges))
+					if stat.ownerChanges > 0 {
+						metricOwnerChanges.Inc(int64(stat.ownerChanges))
 					}
 				}
 			}
