@@ -511,8 +511,6 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 				return fmt.Errorf("failed to commit transaction: %w", err)
 			}
 
-			s.log.Info("batch processed", "firstBlock", firstBlock, "lastBlock", lastBlock, "processingTime", time.Since(startTime).Milliseconds(), "creates", totalCreates, "updates", totalUpdates, "deletes", totalDeletes, "extends", totalExtends, "ownerChanges", totalOwnerChanges)
-
 			tx, err = s.writePool.BeginTx(ctx, &sql.TxOptions{
 				Isolation: sql.LevelSerializable,
 				ReadOnly:  false,
@@ -532,6 +530,8 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 			if err != nil {
 				return fmt.Errorf("failed to commit dolt: %w", err)
 			}
+
+			s.log.Info("batch processed", "firstBlock", firstBlock, "lastBlock", lastBlock, "processingTime", time.Since(startTime).Milliseconds(), "creates", totalCreates, "updates", totalUpdates, "deletes", totalDeletes, "extends", totalExtends, "ownerChanges", totalOwnerChanges)
 
 			return nil
 		}()

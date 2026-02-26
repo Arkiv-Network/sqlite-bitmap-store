@@ -4,6 +4,5 @@ CREATE TABLE payloads (
     payload BLOB NOT NULL,
     content_type VARCHAR(255) NOT NULL DEFAULT '',
     string_attributes JSON NOT NULL DEFAULT '{}',
-    numeric_attributes JSON NOT NULL DEFAULT '{}',
-    UNIQUE KEY payloads_entity_key_index (entity_key)
+    numeric_attributes JSON NOT NULL DEFAULT '{}'
 ) ENGINE = InnoDB;
