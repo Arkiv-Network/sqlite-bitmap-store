@@ -157,6 +157,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 			cache := newBitmapCache(st)
 
 			startTime := time.Now()
+			startOperationsTime := time.Now()
 
 		mainLoop:
 			for _, block := range batch.Batch.Blocks {
@@ -495,16 +496,21 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 				totalExtends += extends
 				totalOwnerChanges += ownerChanges
 			}
+			operationsProcessingTime := time.Since(startOperationsTime).Milliseconds()
+			s.log.Info("operations processed", "operationsProcessingTime", operationsProcessingTime)
 
 			err = st.UpsertLastBlock(ctx, lastBlock)
 			if err != nil {
 				return fmt.Errorf("failed to upsert last block: %w", err)
 			}
 
+			flushBitmapCacheTime := time.Now()
 			err = cache.Flush(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to flush bitmap cache: %w", err)
 			}
+			flushBitmapCacheProcessingTime := time.Since(flushBitmapCacheTime).Milliseconds()
+			s.log.Info("bitmap cache flushed", "flushBitmapCacheProcessingTime", flushBitmapCacheProcessingTime)
 
 			err = tx.Commit()
 			if err != nil {
@@ -521,6 +527,8 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 			defer tx.Rollback()
 
 			st = store.New(tx)
+
+			doltCommitTime := time.Now()
 			err = st.DoltAdd(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to add to dolt: %w", err)
@@ -530,8 +538,23 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 			if err != nil {
 				return fmt.Errorf("failed to commit dolt: %w", err)
 			}
+			doltProcessingTime := time.Since(doltCommitTime).Milliseconds()
+			s.log.Info("dolt committed", "doltProcessingTime", doltProcessingTime)
 
-			s.log.Info("batch processed", "firstBlock", firstBlock, "lastBlock", lastBlock, "processingTime", time.Since(startTime).Milliseconds(), "creates", totalCreates, "updates", totalUpdates, "deletes", totalDeletes, "extends", totalExtends, "ownerChanges", totalOwnerChanges)
+			s.log.Info(
+				"batch processed",
+				"firstBlock", firstBlock,
+				"lastBlock", lastBlock,
+				"processingTime", time.Since(startTime).Milliseconds(),
+				"creates", totalCreates,
+				"updates", totalUpdates,
+				"deletes", totalDeletes,
+				"extends", totalExtends,
+				"ownerChanges", totalOwnerChanges,
+				"operationsProcessingTime", operationsProcessingTime,
+				"flushBitmapCacheProcessingTime", flushBitmapCacheProcessingTime,
+				"doltProcessingTime", doltProcessingTime,
+			)
 
 			return nil
 		}()
