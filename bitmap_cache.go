@@ -16,13 +16,13 @@ type nameValue[T any] struct {
 }
 
 type bitmapCache struct {
-	st store.Querier
+	st *store.Queries
 
 	stringBitmaps  map[nameValue[string]]*store.Bitmap
 	numericBitmaps map[nameValue[uint64]]*store.Bitmap
 }
 
-func newBitmapCache(st store.Querier) *bitmapCache {
+func newBitmapCache(st *store.Queries) *bitmapCache {
 	return &bitmapCache{
 		st:             st,
 		stringBitmaps:  make(map[nameValue[string]]*store.Bitmap),
@@ -132,8 +132,9 @@ func (c *bitmapCache) Flush(ctx context.Context) (err error) {
 		if bitmap.IsEmpty() {
 			continue
 		}
+		b := bitmap
 		eg.Go(func() error {
-			bitmap.RunOptimize()
+			b.RunOptimize()
 			return nil
 		})
 	}
@@ -142,8 +143,9 @@ func (c *bitmapCache) Flush(ctx context.Context) (err error) {
 		if bitmap.IsEmpty() {
 			continue
 		}
+		b := bitmap
 		eg.Go(func() error {
-			bitmap.RunOptimize()
+			b.RunOptimize()
 			return nil
 		})
 	}
@@ -153,36 +155,46 @@ func (c *bitmapCache) Flush(ctx context.Context) (err error) {
 		return fmt.Errorf("failed to run optimize: %w", err)
 	}
 
-	for k, bitmap := range c.stringBitmaps {
+	stringDeletes := make([]store.DeleteStringAttributeValueBitmapParams, 0)
+	stringUpserts := make([]store.UpsertStringAttributeValueBitmapParams, 0)
 
+	for k, bitmap := range c.stringBitmaps {
 		if bitmap.IsEmpty() {
-			err = c.st.DeleteStringAttributeValueBitmap(ctx, store.DeleteStringAttributeValueBitmapParams{Name: k.name, Value: k.value})
-			if err != nil {
-				return fmt.Errorf("failed to delete string attribute %q value %q bitmap: %w", k.name, k.value, err)
-			}
+			stringDeletes = append(stringDeletes, store.DeleteStringAttributeValueBitmapParams{Name: k.name, Value: k.value})
 			continue
 		}
-
-		err = c.st.UpsertStringAttributeValueBitmap(ctx, store.UpsertStringAttributeValueBitmapParams{Name: k.name, Value: k.value, Bitmap: bitmap})
-		if err != nil {
-			return fmt.Errorf("failed to upsert string attribute %q value %q bitmap: %w", k.name, k.value, err)
-		}
+		stringUpserts = append(stringUpserts, store.UpsertStringAttributeValueBitmapParams{Name: k.name, Value: k.value, Bitmap: bitmap})
 	}
 
-	for k, bitmap := range c.numericBitmaps {
+	err = c.st.BulkDeleteStringAttributeValueBitmaps(ctx, stringDeletes)
+	if err != nil {
+		return fmt.Errorf("failed to bulk delete string attribute value bitmaps: %w", err)
+	}
 
+	err = c.st.BulkUpsertStringAttributeValueBitmaps(ctx, stringUpserts)
+	if err != nil {
+		return fmt.Errorf("failed to bulk upsert string attribute value bitmaps: %w", err)
+	}
+
+	numericDeletes := make([]store.DeleteNumericAttributeValueBitmapParams, 0)
+	numericUpserts := make([]store.UpsertNumericAttributeValueBitmapParams, 0)
+
+	for k, bitmap := range c.numericBitmaps {
 		if bitmap.IsEmpty() {
-			err = c.st.DeleteNumericAttributeValueBitmap(ctx, store.DeleteNumericAttributeValueBitmapParams{Name: k.name, Value: k.value})
-			if err != nil {
-				return fmt.Errorf("failed to delete numeric attribute %q value %q bitmap: %w", k.name, k.value, err)
-			}
+			numericDeletes = append(numericDeletes, store.DeleteNumericAttributeValueBitmapParams{Name: k.name, Value: k.value})
 			continue
 		}
+		numericUpserts = append(numericUpserts, store.UpsertNumericAttributeValueBitmapParams{Name: k.name, Value: k.value, Bitmap: bitmap})
+	}
 
-		err = c.st.UpsertNumericAttributeValueBitmap(ctx, store.UpsertNumericAttributeValueBitmapParams{Name: k.name, Value: k.value, Bitmap: bitmap})
-		if err != nil {
-			return fmt.Errorf("failed to upsert numeric attribute %q value %q bitmap: %w", k.name, k.value, err)
-		}
+	err = c.st.BulkDeleteNumericAttributeValueBitmaps(ctx, numericDeletes)
+	if err != nil {
+		return fmt.Errorf("failed to bulk delete numeric attribute value bitmaps: %w", err)
+	}
+
+	err = c.st.BulkUpsertNumericAttributeValueBitmaps(ctx, numericUpserts)
+	if err != nil {
+		return fmt.Errorf("failed to bulk upsert numeric attribute value bitmaps: %w", err)
 	}
 	return nil
 }

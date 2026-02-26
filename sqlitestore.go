@@ -536,7 +536,11 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 			err = st.DoltCommit(ctx, fmt.Sprintf("Batch processed from block %d to %d", firstBlock, lastBlock))
 			if err != nil {
-				return fmt.Errorf("failed to commit dolt: %w", err)
+				// Dolt returns "nothing to commit" when there were no DB changes.
+				// This can happen when we skip already-processed blocks.
+				if !strings.Contains(err.Error(), "nothing to commit") {
+					return fmt.Errorf("failed to commit dolt: %w", err)
+				}
 			}
 			doltProcessingTime := time.Since(doltCommitTime).Milliseconds()
 			s.log.Info("dolt committed", "doltProcessingTime", doltProcessingTime)
