@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	bulkUpsertPayloadChunkSize = 200
-	bulkSelectKeysChunkSize    = 500
+	bulkUpsertPayloadChunkSize = 2000
+	bulkSelectKeysChunkSize    = 2000
 )
 
 func (q *Queries) BulkUpsertPayloads(ctx context.Context, args []UpsertPayloadParams) error {
@@ -99,4 +99,3 @@ func (q *Queries) GetPayloadIDsForEntityKeys(ctx context.Context, entityKeys [][
 
 	return out, nil
 }
-

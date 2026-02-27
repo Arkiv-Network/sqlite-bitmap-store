@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	bulkDeleteBitmapChunkSize = 500
-	bulkUpsertBitmapChunkSize = 500
+	bulkDeleteBitmapChunkSize = 1000
+	bulkUpsertBitmapChunkSize = 1000
 )
 
 func (q *Queries) BulkDeleteStringAttributeValueBitmaps(ctx context.Context, args []DeleteStringAttributeValueBitmapParams) error {
@@ -159,4 +159,3 @@ func (q *Queries) BulkUpsertNumericAttributeValueBitmaps(ctx context.Context, ar
 
 	return nil
 }
-
