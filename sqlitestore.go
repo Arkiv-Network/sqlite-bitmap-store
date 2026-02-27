@@ -162,6 +162,74 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 		mainLoop:
 			for _, block := range batch.Batch.Blocks {
 
+				type pendingCreate struct {
+					entityKey        []byte
+					payload          []byte
+					contentType      string
+					stringAttributes map[string]string
+					numericAttributes map[string]uint64
+				}
+
+				pendingCreates := make(map[string]pendingCreate)
+				pendingCreateOrder := make([]string, 0)
+
+				flushPendingCreates := func() error {
+					if len(pendingCreateOrder) == 0 {
+						return nil
+					}
+
+					upserts := make([]store.UpsertPayloadParams, 0, len(pendingCreateOrder))
+					entityKeys := make([][]byte, 0, len(pendingCreateOrder))
+					for _, k := range pendingCreateOrder {
+						pc := pendingCreates[k]
+						upserts = append(upserts, store.UpsertPayloadParams{
+							EntityKey:         pc.entityKey,
+							Payload:           pc.payload,
+							ContentType:       pc.contentType,
+							StringAttributes:  store.NewStringAttributes(pc.stringAttributes),
+							NumericAttributes: store.NewNumericAttributes(pc.numericAttributes),
+						})
+						entityKeys = append(entityKeys, pc.entityKey)
+					}
+
+					if err := st.BulkUpsertPayloads(ctx, upserts); err != nil {
+						return fmt.Errorf("failed to bulk upsert payloads: %w", err)
+					}
+
+					idsByKey, err := st.GetPayloadIDsForEntityKeys(ctx, entityKeys)
+					if err != nil {
+						return fmt.Errorf("failed to get payload ids for keys: %w", err)
+					}
+
+					for _, k := range pendingCreateOrder {
+						pc := pendingCreates[k]
+						id, ok := idsByKey[string(pc.entityKey)]
+						if !ok {
+							return fmt.Errorf("failed to find id for entity key")
+						}
+
+						for sk, sv := range pc.stringAttributes {
+							if err := cache.AddToStringBitmap(ctx, sk, sv, id); err != nil {
+								return fmt.Errorf("failed to add string attribute value bitmap: %w", err)
+							}
+						}
+
+						for nk, nv := range pc.numericAttributes {
+							switch nk {
+							case "$txIndex", "$opIndex":
+								continue
+							}
+							if err := cache.AddToNumericBitmap(ctx, nk, nv, id); err != nil {
+								return fmt.Errorf("failed to add numeric attribute value bitmap: %w", err)
+							}
+						}
+					}
+
+					clear(pendingCreates)
+					pendingCreateOrder = pendingCreateOrder[:0]
+					return nil
+				}
+
 				updates := 0
 				deletes := 0
 				extends := 0
@@ -211,46 +279,23 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						numericAttributes["$txIndex"] = uint64(operation.TxIndex)
 						numericAttributes["$opIndex"] = uint64(operation.OpIndex)
 
-						result, err := st.UpsertPayload(
-							ctx,
-							store.UpsertPayloadParams{
-								EntityKey:         operation.Create.Key.Bytes(),
-								Payload:           operation.Create.Content,
-								ContentType:       operation.Create.ContentType,
-								StringAttributes:  store.NewStringAttributes(stringAttributes),
-								NumericAttributes: store.NewNumericAttributes(numericAttributes),
-							},
-						)
-						if err != nil {
-							return fmt.Errorf("failed to insert payload %s at block %d txIndex %d opIndex %d: %w", key.Hex(), block.Number, operation.TxIndex, operation.OpIndex, err)
+						ek := operation.Create.Key.Bytes()
+						mapKey := string(ek)
+						if _, exists := pendingCreates[mapKey]; !exists {
+							pendingCreateOrder = append(pendingCreateOrder, mapKey)
+						}
+						pendingCreates[mapKey] = pendingCreate{
+							entityKey:        ek,
+							payload:          operation.Create.Content,
+							contentType:      operation.Create.ContentType,
+							stringAttributes: stringAttributes,
+							numericAttributes: numericAttributes,
 						}
 
-						id, err := result.LastInsertId()
-						if err != nil {
-							return fmt.Errorf("failed to get last insert id: %w", err)
-						}
-
-						for k, v := range stringAttributes {
-							err = cache.AddToStringBitmap(ctx, k, v, uint64(id))
-							if err != nil {
-								return fmt.Errorf("failed to add string attribute value bitmap: %w", err)
-							}
-						}
-
-						for k, v := range numericAttributes {
-
-							// skip txIndex and opIndex because they are not used for querying
-							switch k {
-							case "$txIndex", "$opIndex":
-								continue
-							}
-
-							err = cache.AddToNumericBitmap(ctx, k, v, uint64(id))
-							if err != nil {
-								return fmt.Errorf("failed to add numeric attribute value bitmap: %w", err)
-							}
-						}
 					case operation.Update != nil:
+						if err := flushPendingCreates(); err != nil {
+							return err
+						}
 						updates++
 
 						updates := updatesMap[operation.Update.Key]
@@ -348,6 +393,9 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						}
 
 					case operation.Delete != nil || operation.Expire != nil:
+						if err := flushPendingCreates(); err != nil {
+							return err
+						}
 
 						deletes++
 						var key []byte
@@ -392,6 +440,9 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						}
 
 					case operation.ExtendBTL != nil:
+						if err := flushPendingCreates(); err != nil {
+							return err
+						}
 
 						extends++
 
@@ -438,6 +489,9 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						}
 
 					case operation.ChangeOwner != nil:
+						if err := flushPendingCreates(); err != nil {
+							return err
+						}
 						ownerChanges++
 						key := operation.ChangeOwner.Key.Bytes()
 
@@ -484,9 +538,16 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						}
 
 					default:
+						if err := flushPendingCreates(); err != nil {
+							return err
+						}
 						return fmt.Errorf("unknown operation: %v", operation)
 					}
 
+				}
+
+				if err := flushPendingCreates(); err != nil {
+					return err
 				}
 
 				s.log.Info("block updated", "block", block.Number, "creates", creates, "updates", updates, "deletes", deletes, "extends", extends, "ownerChanges", ownerChanges)
