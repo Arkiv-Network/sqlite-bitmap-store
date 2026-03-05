@@ -24,6 +24,7 @@ type IncludeData struct {
 	Payload                     bool `json:"payload"`
 	ContentType                 bool `json:"contentType"`
 	Expiration                  bool `json:"expiration"`
+	Creator                     bool `json:"creator"`
 	Owner                       bool `json:"owner"`
 	CreatedAtBlock              bool `json:"createdAtBlock"`
 	LastModifiedAtBlock         bool `json:"lastModifiedAtBlock"`
@@ -58,6 +59,7 @@ func (o *Options) GetIncludeData() IncludeData {
 			Key:         true,
 			ContentType: true,
 			Payload:     true,
+			Creator:     true,
 			Owner:       true,
 			Attributes:  true,
 			Expiration:  true,
@@ -90,6 +92,7 @@ type EntityData struct {
 	Value                       hexutil.Bytes   `json:"value,omitempty"`
 	ContentType                 *string         `json:"contentType,omitempty"`
 	ExpiresAt                   *uint64         `json:"expiresAt,omitempty"`
+	Creator                     *common.Address `json:"creator,omitempty"`
 	Owner                       *common.Address `json:"owner,omitempty"`
 	CreatedAtBlock              *uint64         `json:"createdAtBlock,omitempty"`
 	LastModifiedAtBlock         *uint64         `json:"lastModifiedAtBlock,omitempty"`
@@ -276,7 +279,7 @@ func nonSyntheticPredicate(k string) bool {
 	return !strings.HasPrefix(k, "$")
 }
 
-func anyPredicate(k string) bool {
+func anyPredicate(string) bool {
 	return true
 }
 
@@ -307,6 +310,10 @@ func toPayload(r store.RetrievePayloadsRow, includeData IncludeData) *EntityData
 
 	if includeData.Expiration {
 		res.ExpiresAt = pointerOf(r.NumericAttributes.Values["$expiration"])
+	}
+
+	if includeData.Creator {
+		res.Creator = pointerOf(common.HexToAddress(r.StringAttributes.Values["$creator"]))
 	}
 
 	if includeData.Owner {
