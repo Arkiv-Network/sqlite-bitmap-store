@@ -65,6 +65,7 @@ func main() {
 						Attributes:                  true,
 						SyntheticAttributes:         true,
 						Expiration:                  true,
+						Creator:                     true,
 						Owner:                       true,
 						CreatedAtBlock:              true,
 						LastModifiedAtBlock:         true,
