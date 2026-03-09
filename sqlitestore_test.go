@@ -449,6 +449,7 @@ var _ = Describe("SQLiteStore", func() {
 
 			createContent := []byte("abc")
 			updateContent := []byte("abcdef")
+			deletedContentSize := int64(len(updateContent))
 
 			createsBefore := counterValue("arkiv_store/creates_bytes")
 			updatesBefore := counterValue("arkiv_store/updates_bytes")
@@ -539,7 +540,7 @@ var _ = Describe("SQLiteStore", func() {
 
 			Expect(counterValue("arkiv_store/creates_bytes") - createsBefore).To(Equal(int64(len(createContent))))
 			Expect(counterValue("arkiv_store/updates_bytes") - updatesBefore).To(Equal(int64(len(updateContent))))
-			Expect(counterValue("arkiv_store/deletes_bytes") - deletesBefore).To(Equal(int64(len(updateContent))))
+			Expect(counterValue("arkiv_store/deletes_bytes") - deletesBefore).To(Equal(deletedContentSize))
 		})
 	})
 
