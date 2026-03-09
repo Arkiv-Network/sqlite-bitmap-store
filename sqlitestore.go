@@ -546,7 +546,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						metricExtends.Inc(stat.extends)
 					}
 					if stat.ownerChanges > 0 {
-						metricOwnerChanges.Inc(int64(stat.ownerChanges))
+						metricOwnerChanges.Inc(stat.ownerChanges)
 					}
 				}
 			}
