@@ -525,25 +525,25 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 					// Update metrics specifically per block
 					if stat.creates > 0 {
-						metricCreates.Inc(int64(stat.creates))
+						metricCreates.Inc(stat.creates)
 					}
 					if stat.createsBytes > 0 {
-						metricCreatesBytes.Inc(int64(stat.createsBytes))
+						metricCreatesBytes.Inc(stat.createsBytes)
 					}
 					if stat.updates > 0 {
-						metricUpdates.Inc(int64(stat.updates))
+						metricUpdates.Inc(stat.updates)
 					}
 					if stat.updatesBytes > 0 {
-						metricUpdatesBytes.Inc(int64(stat.updatesBytes))
+						metricUpdatesBytes.Inc(stat.updatesBytes)
 					}
 					if stat.deletes > 0 {
-						metricDeletes.Inc(int64(stat.deletes))
+						metricDeletes.Inc(stat.deletes)
 					}
 					if stat.deletesBytes > 0 {
-						metricDeletesBytes.Inc(int64(stat.deletesBytes))
+						metricDeletesBytes.Inc(stat.deletesBytes)
 					}
 					if stat.extends > 0 {
-						metricExtends.Inc(int64(stat.extends))
+						metricExtends.Inc(stat.extends)
 					}
 					if stat.ownerChanges > 0 {
 						metricOwnerChanges.Inc(int64(stat.ownerChanges))
