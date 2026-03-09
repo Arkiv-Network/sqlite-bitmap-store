@@ -29,8 +29,11 @@ var (
 	metricOperationStarted    = metrics.NewRegisteredCounter("arkiv_store/operations_started", nil)
 	metricOperationSuccessful = metrics.NewRegisteredCounter("arkiv_store/operations_successful", nil)
 	metricCreates             = metrics.NewRegisteredCounter("arkiv_store/creates", nil)
+	metricCreatesBytes        = metrics.NewRegisteredCounter("arkiv_store/creates_bytes", nil)
 	metricUpdates             = metrics.NewRegisteredCounter("arkiv_store/updates", nil)
+	metricUpdatesBytes        = metrics.NewRegisteredCounter("arkiv_store/updates_bytes", nil)
 	metricDeletes             = metrics.NewRegisteredCounter("arkiv_store/deletes", nil)
+	metricDeletesBytes        = metrics.NewRegisteredCounter("arkiv_store/deletes_bytes", nil)
 	metricExtends             = metrics.NewRegisteredCounter("arkiv_store/extends", nil)
 	metricOwnerChanges        = metrics.NewRegisteredCounter("arkiv_store/owner_changes", nil)
 	// Tracks operation duration (ms) using an exponential decay sample so the histogram
@@ -117,8 +120,11 @@ func (s *SQLiteStore) GetLastBlock(ctx context.Context) (uint64, error) {
 
 type blockStats struct {
 	creates      int
+	createsBytes int
 	updates      int
+	updatesBytes int
 	deletes      int
+	deletesBytes int
 	extends      int
 	ownerChanges int
 }
@@ -193,6 +199,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 					case operation.Create != nil:
 						// expiresAtBlock := blockNumber + operation.Create.BTL
 						blockStat.creates++
+						blockStat.createsBytes += len(operation.Create.Content)
 						key := operation.Create.Key
 
 						stringAttributes := maps.Clone(operation.Create.StringAttributes)
@@ -255,6 +262,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 							continue operationLoop
 						}
 						blockStat.updates++
+						blockStat.updatesBytes += len(operation.Update.Content)
 
 						key := operation.Update.Key.Bytes()
 
@@ -353,6 +361,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						if err != nil {
 							return fmt.Errorf("failed to get latest payload: %w", err)
 						}
+						blockStat.deletesBytes += len(latestPayload.Payload)
 
 						oldStringAttributes := latestPayload.StringAttributes
 
@@ -493,8 +502,11 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 			// Calculate batch totals for logging and update metrics PER BLOCK
 			var (
 				totalCreates      int
+				totalCreatesBytes int
 				totalUpdates      int
+				totalUpdatesBytes int
 				totalDeletes      int
+				totalDeletesBytes int
 				totalExtends      int
 				totalOwnerChanges int
 			)
@@ -503,8 +515,11 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 			for _, block := range batch.Batch.Blocks {
 				if stat, ok := stats[block.Number]; ok {
 					totalCreates += stat.creates
+					totalCreatesBytes += stat.createsBytes
 					totalUpdates += stat.updates
+					totalUpdatesBytes += stat.updatesBytes
 					totalDeletes += stat.deletes
+					totalDeletesBytes += stat.deletesBytes
 					totalExtends += stat.extends
 					totalOwnerChanges += stat.ownerChanges
 
@@ -512,11 +527,20 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 					if stat.creates > 0 {
 						metricCreates.Inc(int64(stat.creates))
 					}
+					if stat.createsBytes > 0 {
+						metricCreatesBytes.Inc(int64(stat.createsBytes))
+					}
 					if stat.updates > 0 {
 						metricUpdates.Inc(int64(stat.updates))
 					}
+					if stat.updatesBytes > 0 {
+						metricUpdatesBytes.Inc(int64(stat.updatesBytes))
+					}
 					if stat.deletes > 0 {
 						metricDeletes.Inc(int64(stat.deletes))
+					}
+					if stat.deletesBytes > 0 {
+						metricDeletesBytes.Inc(int64(stat.deletesBytes))
 					}
 					if stat.extends > 0 {
 						metricExtends.Inc(int64(stat.extends))
@@ -535,8 +559,11 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 				"lastBlock", lastBlock,
 				"processingTime", time.Since(startTime).Milliseconds(),
 				"creates", totalCreates,
+				"createsBytes", totalCreatesBytes,
 				"updates", totalUpdates,
+				"updatesBytes", totalUpdatesBytes,
 				"deletes", totalDeletes,
+				"deletesBytes", totalDeletesBytes,
 				"extends", totalExtends,
 				"ownerChanges", totalOwnerChanges)
 
