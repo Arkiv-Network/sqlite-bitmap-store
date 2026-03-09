@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/metrics"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -18,6 +19,11 @@ import (
 	"github.com/Arkiv-Network/sqlite-bitmap-store/pusher"
 	"github.com/Arkiv-Network/sqlite-bitmap-store/store"
 )
+
+func counterValue(name string) int64 {
+	counter := metrics.GetOrRegisterCounter(name, nil)
+	return counter.Snapshot().Count()
+}
 
 var _ = Describe("SQLiteStore", func() {
 	var (
@@ -433,6 +439,107 @@ var _ = Describe("SQLiteStore", func() {
 				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	Describe("FollowEvents byte metrics", func() {
+		It("should track create, update, and delete payload sizes in bytes", func() {
+			key := common.HexToHash("0xabababababababababababababababababababababababababababababababab")
+			owner := common.HexToAddress("0x1234567890123456789012345678901234567890")
+
+			createContent := []byte("abc")
+			updateContent := []byte("abcdef")
+
+			createsBefore := counterValue("arkiv_store/creates_bytes")
+			updatesBefore := counterValue("arkiv_store/updates_bytes")
+			deletesBefore := counterValue("arkiv_store/deletes_bytes")
+
+			createIterator := pusher.NewPushIterator()
+			go func() {
+				defer GinkgoRecover()
+				createIterator.Push(ctx, events.BlockBatch{
+					Blocks: []events.Block{
+						{
+							Number: 100,
+							Operations: []events.Operation{
+								{
+									TxIndex: 0,
+									OpIndex: 0,
+									Create: &events.OPCreate{
+										Key:               key,
+										ContentType:       "text/plain",
+										BTL:               500,
+										Owner:             owner,
+										Content:           createContent,
+										StringAttributes:  map[string]string{"status": "created"},
+										NumericAttributes: map[string]uint64{},
+									},
+								},
+							},
+						},
+					},
+				})
+				createIterator.Close()
+			}()
+			err := sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(createIterator.Iterator()))
+			Expect(err).NotTo(HaveOccurred())
+
+			updateIterator := pusher.NewPushIterator()
+			go func() {
+				defer GinkgoRecover()
+				updateIterator.Push(ctx, events.BlockBatch{
+					Blocks: []events.Block{
+						{
+							Number: 101,
+							Operations: []events.Operation{
+								{
+									TxIndex: 0,
+									OpIndex: 0,
+									Update: &events.OPUpdate{
+										Key:               key,
+										ContentType:       "text/plain",
+										BTL:               500,
+										Owner:             owner,
+										Content:           updateContent,
+										StringAttributes:  map[string]string{"status": "updated"},
+										NumericAttributes: map[string]uint64{},
+									},
+								},
+							},
+						},
+					},
+				})
+				updateIterator.Close()
+			}()
+			err = sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(updateIterator.Iterator()))
+			Expect(err).NotTo(HaveOccurred())
+
+			deleteIterator := pusher.NewPushIterator()
+			deleteKey := events.OPDelete(key)
+			go func() {
+				defer GinkgoRecover()
+				deleteIterator.Push(ctx, events.BlockBatch{
+					Blocks: []events.Block{
+						{
+							Number: 102,
+							Operations: []events.Operation{
+								{
+									TxIndex: 0,
+									OpIndex: 0,
+									Delete:  &deleteKey,
+								},
+							},
+						},
+					},
+				})
+				deleteIterator.Close()
+			}()
+			err = sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(deleteIterator.Iterator()))
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(counterValue("arkiv_store/creates_bytes") - createsBefore).To(Equal(int64(len(createContent))))
+			Expect(counterValue("arkiv_store/updates_bytes") - updatesBefore).To(Equal(int64(len(updateContent))))
+			Expect(counterValue("arkiv_store/deletes_bytes") - deletesBefore).To(Equal(int64(len(updateContent))))
 		})
 	})
 
