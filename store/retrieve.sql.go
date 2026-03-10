@@ -10,8 +10,66 @@ import (
 	"strings"
 )
 
+const evaluateAllAtBlock = `-- name: EvaluateAllAtBlock :many
+SELECT id FROM payloads
+WHERE from_block <= ?1 AND (to_block IS NULL OR to_block > ?1)
+ORDER BY id DESC
+`
+
+func (q *Queries) EvaluateAllAtBlock(ctx context.Context, block uint64) ([]uint64, error) {
+	rows, err := q.query(ctx, q.evaluateAllAtBlockStmt, evaluateAllAtBlock, block)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uint64{}
+	for rows.Next() {
+		var id uint64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const evaluateAllCurrent = `-- name: EvaluateAllCurrent :many
+SELECT id FROM payloads
+WHERE to_block IS NULL
+ORDER BY id DESC
+`
+
+func (q *Queries) EvaluateAllCurrent(ctx context.Context) ([]uint64, error) {
+	rows, err := q.query(ctx, q.evaluateAllCurrentStmt, evaluateAllCurrent)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uint64{}
+	for rows.Next() {
+		var id uint64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getNumberOfEntities = `-- name: GetNumberOfEntities :one
-SELECT COUNT(*) FROM payloads
+SELECT COUNT(*) FROM payloads WHERE to_block IS NULL
 `
 
 func (q *Queries) GetNumberOfEntities(ctx context.Context) (int64, error) {

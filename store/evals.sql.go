@@ -10,24 +10,33 @@ import (
 	"strings"
 )
 
-const evaluateAll = `-- name: EvaluateAll :many
-SELECT id FROM payloads
-ORDER BY id DESC
+const getMatchingNumericValuesEqual = `-- name: GetMatchingNumericValuesEqual :many
+
+SELECT DISTINCT value FROM numeric_attributes_values_bitmaps
+WHERE name = ?1 AND value = ?2
+  AND block <= ?3
 `
 
-func (q *Queries) EvaluateAll(ctx context.Context) ([]uint64, error) {
-	rows, err := q.query(ctx, q.evaluateAllStmt, evaluateAll)
+type GetMatchingNumericValuesEqualParams struct {
+	Name        string
+	Value       uint64
+	TargetBlock uint64
+}
+
+// Numeric attribute value queries
+func (q *Queries) GetMatchingNumericValuesEqual(ctx context.Context, arg GetMatchingNumericValuesEqualParams) ([]uint64, error) {
+	rows, err := q.query(ctx, q.getMatchingNumericValuesEqualStmt, getMatchingNumericValuesEqual, arg.Name, arg.Value, arg.TargetBlock)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	items := []uint64{}
 	for rows.Next() {
-		var id uint64
-		if err := rows.Scan(&id); err != nil {
+		var value uint64
+		if err := rows.Scan(&value); err != nil {
 			return nil, err
 		}
-		items = append(items, id)
+		items = append(items, value)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -38,46 +47,31 @@ func (q *Queries) EvaluateAll(ctx context.Context) ([]uint64, error) {
 	return items, nil
 }
 
-const evaluateNumericAttributeValueEqual = `-- name: EvaluateNumericAttributeValueEqual :one
-SELECT bitmap FROM numeric_attributes_values_bitmaps
-WHERE name = ?1 AND value = ?2
-`
-
-type EvaluateNumericAttributeValueEqualParams struct {
-	Name  string
-	Value uint64
-}
-
-func (q *Queries) EvaluateNumericAttributeValueEqual(ctx context.Context, arg EvaluateNumericAttributeValueEqualParams) (*Bitmap, error) {
-	row := q.queryRow(ctx, q.evaluateNumericAttributeValueEqualStmt, evaluateNumericAttributeValueEqual, arg.Name, arg.Value)
-	var bitmap *Bitmap
-	err := row.Scan(&bitmap)
-	return bitmap, err
-}
-
-const evaluateNumericAttributeValueGreaterOrEqualThan = `-- name: EvaluateNumericAttributeValueGreaterOrEqualThan :many
-SELECT bitmap FROM numeric_attributes_values_bitmaps
+const getMatchingNumericValuesGreaterOrEqualThan = `-- name: GetMatchingNumericValuesGreaterOrEqualThan :many
+SELECT DISTINCT value FROM numeric_attributes_values_bitmaps
 WHERE name = ?1 AND value >= ?2
+  AND block <= ?3
 `
 
-type EvaluateNumericAttributeValueGreaterOrEqualThanParams struct {
-	Name  string
-	Value uint64
+type GetMatchingNumericValuesGreaterOrEqualThanParams struct {
+	Name        string
+	Value       uint64
+	TargetBlock uint64
 }
 
-func (q *Queries) EvaluateNumericAttributeValueGreaterOrEqualThan(ctx context.Context, arg EvaluateNumericAttributeValueGreaterOrEqualThanParams) ([]*Bitmap, error) {
-	rows, err := q.query(ctx, q.evaluateNumericAttributeValueGreaterOrEqualThanStmt, evaluateNumericAttributeValueGreaterOrEqualThan, arg.Name, arg.Value)
+func (q *Queries) GetMatchingNumericValuesGreaterOrEqualThan(ctx context.Context, arg GetMatchingNumericValuesGreaterOrEqualThanParams) ([]uint64, error) {
+	rows, err := q.query(ctx, q.getMatchingNumericValuesGreaterOrEqualThanStmt, getMatchingNumericValuesGreaterOrEqualThan, arg.Name, arg.Value, arg.TargetBlock)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []*Bitmap{}
+	items := []uint64{}
 	for rows.Next() {
-		var bitmap *Bitmap
-		if err := rows.Scan(&bitmap); err != nil {
+		var value uint64
+		if err := rows.Scan(&value); err != nil {
 			return nil, err
 		}
-		items = append(items, bitmap)
+		items = append(items, value)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -88,29 +82,31 @@ func (q *Queries) EvaluateNumericAttributeValueGreaterOrEqualThan(ctx context.Co
 	return items, nil
 }
 
-const evaluateNumericAttributeValueGreaterThan = `-- name: EvaluateNumericAttributeValueGreaterThan :many
-SELECT bitmap FROM numeric_attributes_values_bitmaps
+const getMatchingNumericValuesGreaterThan = `-- name: GetMatchingNumericValuesGreaterThan :many
+SELECT DISTINCT value FROM numeric_attributes_values_bitmaps
 WHERE name = ?1 AND value > ?2
+  AND block <= ?3
 `
 
-type EvaluateNumericAttributeValueGreaterThanParams struct {
-	Name  string
-	Value uint64
+type GetMatchingNumericValuesGreaterThanParams struct {
+	Name        string
+	Value       uint64
+	TargetBlock uint64
 }
 
-func (q *Queries) EvaluateNumericAttributeValueGreaterThan(ctx context.Context, arg EvaluateNumericAttributeValueGreaterThanParams) ([]*Bitmap, error) {
-	rows, err := q.query(ctx, q.evaluateNumericAttributeValueGreaterThanStmt, evaluateNumericAttributeValueGreaterThan, arg.Name, arg.Value)
+func (q *Queries) GetMatchingNumericValuesGreaterThan(ctx context.Context, arg GetMatchingNumericValuesGreaterThanParams) ([]uint64, error) {
+	rows, err := q.query(ctx, q.getMatchingNumericValuesGreaterThanStmt, getMatchingNumericValuesGreaterThan, arg.Name, arg.Value, arg.TargetBlock)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []*Bitmap{}
+	items := []uint64{}
 	for rows.Next() {
-		var bitmap *Bitmap
-		if err := rows.Scan(&bitmap); err != nil {
+		var value uint64
+		if err := rows.Scan(&value); err != nil {
 			return nil, err
 		}
-		items = append(items, bitmap)
+		items = append(items, value)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -121,18 +117,20 @@ func (q *Queries) EvaluateNumericAttributeValueGreaterThan(ctx context.Context, 
 	return items, nil
 }
 
-const evaluateNumericAttributeValueInclusion = `-- name: EvaluateNumericAttributeValueInclusion :many
-SELECT bitmap FROM numeric_attributes_values_bitmaps
+const getMatchingNumericValuesInclusion = `-- name: GetMatchingNumericValuesInclusion :many
+SELECT DISTINCT value FROM numeric_attributes_values_bitmaps
 WHERE name = ?1 AND value IN (/*SLICE:values*/?)
+  AND block <= ?3
 `
 
-type EvaluateNumericAttributeValueInclusionParams struct {
-	Name   string
-	Values []uint64
+type GetMatchingNumericValuesInclusionParams struct {
+	Name        string
+	Values      []uint64
+	TargetBlock uint64
 }
 
-func (q *Queries) EvaluateNumericAttributeValueInclusion(ctx context.Context, arg EvaluateNumericAttributeValueInclusionParams) ([]*Bitmap, error) {
-	query := evaluateNumericAttributeValueInclusion
+func (q *Queries) GetMatchingNumericValuesInclusion(ctx context.Context, arg GetMatchingNumericValuesInclusionParams) ([]uint64, error) {
+	query := getMatchingNumericValuesInclusion
 	var queryParams []interface{}
 	queryParams = append(queryParams, arg.Name)
 	if len(arg.Values) > 0 {
@@ -143,18 +141,19 @@ func (q *Queries) EvaluateNumericAttributeValueInclusion(ctx context.Context, ar
 	} else {
 		query = strings.Replace(query, "/*SLICE:values*/?", "NULL", 1)
 	}
+	queryParams = append(queryParams, arg.TargetBlock)
 	rows, err := q.query(ctx, nil, query, queryParams...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []*Bitmap{}
+	items := []uint64{}
 	for rows.Next() {
-		var bitmap *Bitmap
-		if err := rows.Scan(&bitmap); err != nil {
+		var value uint64
+		if err := rows.Scan(&value); err != nil {
 			return nil, err
 		}
-		items = append(items, bitmap)
+		items = append(items, value)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -165,29 +164,31 @@ func (q *Queries) EvaluateNumericAttributeValueInclusion(ctx context.Context, ar
 	return items, nil
 }
 
-const evaluateNumericAttributeValueLessOrEqualThan = `-- name: EvaluateNumericAttributeValueLessOrEqualThan :many
-SELECT bitmap FROM numeric_attributes_values_bitmaps
+const getMatchingNumericValuesLessOrEqualThan = `-- name: GetMatchingNumericValuesLessOrEqualThan :many
+SELECT DISTINCT value FROM numeric_attributes_values_bitmaps
 WHERE name = ?1 AND value <= ?2
+  AND block <= ?3
 `
 
-type EvaluateNumericAttributeValueLessOrEqualThanParams struct {
-	Name  string
-	Value uint64
+type GetMatchingNumericValuesLessOrEqualThanParams struct {
+	Name        string
+	Value       uint64
+	TargetBlock uint64
 }
 
-func (q *Queries) EvaluateNumericAttributeValueLessOrEqualThan(ctx context.Context, arg EvaluateNumericAttributeValueLessOrEqualThanParams) ([]*Bitmap, error) {
-	rows, err := q.query(ctx, q.evaluateNumericAttributeValueLessOrEqualThanStmt, evaluateNumericAttributeValueLessOrEqualThan, arg.Name, arg.Value)
+func (q *Queries) GetMatchingNumericValuesLessOrEqualThan(ctx context.Context, arg GetMatchingNumericValuesLessOrEqualThanParams) ([]uint64, error) {
+	rows, err := q.query(ctx, q.getMatchingNumericValuesLessOrEqualThanStmt, getMatchingNumericValuesLessOrEqualThan, arg.Name, arg.Value, arg.TargetBlock)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []*Bitmap{}
+	items := []uint64{}
 	for rows.Next() {
-		var bitmap *Bitmap
-		if err := rows.Scan(&bitmap); err != nil {
+		var value uint64
+		if err := rows.Scan(&value); err != nil {
 			return nil, err
 		}
-		items = append(items, bitmap)
+		items = append(items, value)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -198,29 +199,31 @@ func (q *Queries) EvaluateNumericAttributeValueLessOrEqualThan(ctx context.Conte
 	return items, nil
 }
 
-const evaluateNumericAttributeValueLowerThan = `-- name: EvaluateNumericAttributeValueLowerThan :many
-SELECT bitmap FROM numeric_attributes_values_bitmaps
+const getMatchingNumericValuesLessThan = `-- name: GetMatchingNumericValuesLessThan :many
+SELECT DISTINCT value FROM numeric_attributes_values_bitmaps
 WHERE name = ?1 AND value < ?2
+  AND block <= ?3
 `
 
-type EvaluateNumericAttributeValueLowerThanParams struct {
-	Name  string
-	Value uint64
+type GetMatchingNumericValuesLessThanParams struct {
+	Name        string
+	Value       uint64
+	TargetBlock uint64
 }
 
-func (q *Queries) EvaluateNumericAttributeValueLowerThan(ctx context.Context, arg EvaluateNumericAttributeValueLowerThanParams) ([]*Bitmap, error) {
-	rows, err := q.query(ctx, q.evaluateNumericAttributeValueLowerThanStmt, evaluateNumericAttributeValueLowerThan, arg.Name, arg.Value)
+func (q *Queries) GetMatchingNumericValuesLessThan(ctx context.Context, arg GetMatchingNumericValuesLessThanParams) ([]uint64, error) {
+	rows, err := q.query(ctx, q.getMatchingNumericValuesLessThanStmt, getMatchingNumericValuesLessThan, arg.Name, arg.Value, arg.TargetBlock)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []*Bitmap{}
+	items := []uint64{}
 	for rows.Next() {
-		var bitmap *Bitmap
-		if err := rows.Scan(&bitmap); err != nil {
+		var value uint64
+		if err := rows.Scan(&value); err != nil {
 			return nil, err
 		}
-		items = append(items, bitmap)
+		items = append(items, value)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -231,29 +234,31 @@ func (q *Queries) EvaluateNumericAttributeValueLowerThan(ctx context.Context, ar
 	return items, nil
 }
 
-const evaluateNumericAttributeValueNotEqual = `-- name: EvaluateNumericAttributeValueNotEqual :many
-SELECT bitmap FROM numeric_attributes_values_bitmaps
+const getMatchingNumericValuesNotEqual = `-- name: GetMatchingNumericValuesNotEqual :many
+SELECT DISTINCT value FROM numeric_attributes_values_bitmaps
 WHERE name = ?1 AND value != ?2
+  AND block <= ?3
 `
 
-type EvaluateNumericAttributeValueNotEqualParams struct {
-	Name  string
-	Value uint64
+type GetMatchingNumericValuesNotEqualParams struct {
+	Name        string
+	Value       uint64
+	TargetBlock uint64
 }
 
-func (q *Queries) EvaluateNumericAttributeValueNotEqual(ctx context.Context, arg EvaluateNumericAttributeValueNotEqualParams) ([]*Bitmap, error) {
-	rows, err := q.query(ctx, q.evaluateNumericAttributeValueNotEqualStmt, evaluateNumericAttributeValueNotEqual, arg.Name, arg.Value)
+func (q *Queries) GetMatchingNumericValuesNotEqual(ctx context.Context, arg GetMatchingNumericValuesNotEqualParams) ([]uint64, error) {
+	rows, err := q.query(ctx, q.getMatchingNumericValuesNotEqualStmt, getMatchingNumericValuesNotEqual, arg.Name, arg.Value, arg.TargetBlock)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []*Bitmap{}
+	items := []uint64{}
 	for rows.Next() {
-		var bitmap *Bitmap
-		if err := rows.Scan(&bitmap); err != nil {
+		var value uint64
+		if err := rows.Scan(&value); err != nil {
 			return nil, err
 		}
-		items = append(items, bitmap)
+		items = append(items, value)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -264,18 +269,20 @@ func (q *Queries) EvaluateNumericAttributeValueNotEqual(ctx context.Context, arg
 	return items, nil
 }
 
-const evaluateNumericAttributeValueNotInclusion = `-- name: EvaluateNumericAttributeValueNotInclusion :many
-SELECT bitmap FROM numeric_attributes_values_bitmaps
+const getMatchingNumericValuesNotInclusion = `-- name: GetMatchingNumericValuesNotInclusion :many
+SELECT DISTINCT value FROM numeric_attributes_values_bitmaps
 WHERE name = ?1 AND value NOT IN (/*SLICE:values*/?)
+  AND block <= ?3
 `
 
-type EvaluateNumericAttributeValueNotInclusionParams struct {
-	Name   string
-	Values []uint64
+type GetMatchingNumericValuesNotInclusionParams struct {
+	Name        string
+	Values      []uint64
+	TargetBlock uint64
 }
 
-func (q *Queries) EvaluateNumericAttributeValueNotInclusion(ctx context.Context, arg EvaluateNumericAttributeValueNotInclusionParams) ([]*Bitmap, error) {
-	query := evaluateNumericAttributeValueNotInclusion
+func (q *Queries) GetMatchingNumericValuesNotInclusion(ctx context.Context, arg GetMatchingNumericValuesNotInclusionParams) ([]uint64, error) {
+	query := getMatchingNumericValuesNotInclusion
 	var queryParams []interface{}
 	queryParams = append(queryParams, arg.Name)
 	if len(arg.Values) > 0 {
@@ -286,18 +293,19 @@ func (q *Queries) EvaluateNumericAttributeValueNotInclusion(ctx context.Context,
 	} else {
 		query = strings.Replace(query, "/*SLICE:values*/?", "NULL", 1)
 	}
+	queryParams = append(queryParams, arg.TargetBlock)
 	rows, err := q.query(ctx, nil, query, queryParams...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []*Bitmap{}
+	items := []uint64{}
 	for rows.Next() {
-		var bitmap *Bitmap
-		if err := rows.Scan(&bitmap); err != nil {
+		var value uint64
+		if err := rows.Scan(&value); err != nil {
 			return nil, err
 		}
-		items = append(items, bitmap)
+		items = append(items, value)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -308,46 +316,72 @@ func (q *Queries) EvaluateNumericAttributeValueNotInclusion(ctx context.Context,
 	return items, nil
 }
 
-const evaluateStringAttributeValueEqual = `-- name: EvaluateStringAttributeValueEqual :one
-SELECT bitmap FROM string_attributes_values_bitmaps
+const getMatchingStringValuesEqual = `-- name: GetMatchingStringValuesEqual :many
+
+
+SELECT DISTINCT value FROM string_attributes_values_bitmaps
 WHERE name = ?1 AND value = ?2
+  AND block <= ?3
 `
 
-type EvaluateStringAttributeValueEqualParams struct {
-	Name  string
-	Value string
+type GetMatchingStringValuesEqualParams struct {
+	Name        string
+	Value       string
+	TargetBlock uint64
 }
 
-func (q *Queries) EvaluateStringAttributeValueEqual(ctx context.Context, arg EvaluateStringAttributeValueEqualParams) (*Bitmap, error) {
-	row := q.queryRow(ctx, q.evaluateStringAttributeValueEqualStmt, evaluateStringAttributeValueEqual, arg.Name, arg.Value)
-	var bitmap *Bitmap
-	err := row.Scan(&bitmap)
-	return bitmap, err
+// Value-listing queries for query evaluation.
+// Each returns distinct values matching a condition, filtered by block.
+// The Go layer then reconstructs bitmaps for each matching value via XOR chains.
+// String attribute value queries
+func (q *Queries) GetMatchingStringValuesEqual(ctx context.Context, arg GetMatchingStringValuesEqualParams) ([]string, error) {
+	rows, err := q.query(ctx, q.getMatchingStringValuesEqualStmt, getMatchingStringValuesEqual, arg.Name, arg.Value, arg.TargetBlock)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var value string
+		if err := rows.Scan(&value); err != nil {
+			return nil, err
+		}
+		items = append(items, value)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-const evaluateStringAttributeValueGlob = `-- name: EvaluateStringAttributeValueGlob :many
-SELECT bitmap FROM string_attributes_values_bitmaps
+const getMatchingStringValuesGlob = `-- name: GetMatchingStringValuesGlob :many
+SELECT DISTINCT value FROM string_attributes_values_bitmaps
 WHERE name = ?1 AND value GLOB ?2
+  AND block <= ?3
 `
 
-type EvaluateStringAttributeValueGlobParams struct {
-	Name  string
-	Value string
+type GetMatchingStringValuesGlobParams struct {
+	Name        string
+	Value       string
+	TargetBlock uint64
 }
 
-func (q *Queries) EvaluateStringAttributeValueGlob(ctx context.Context, arg EvaluateStringAttributeValueGlobParams) ([]*Bitmap, error) {
-	rows, err := q.query(ctx, q.evaluateStringAttributeValueGlobStmt, evaluateStringAttributeValueGlob, arg.Name, arg.Value)
+func (q *Queries) GetMatchingStringValuesGlob(ctx context.Context, arg GetMatchingStringValuesGlobParams) ([]string, error) {
+	rows, err := q.query(ctx, q.getMatchingStringValuesGlobStmt, getMatchingStringValuesGlob, arg.Name, arg.Value, arg.TargetBlock)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []*Bitmap{}
+	items := []string{}
 	for rows.Next() {
-		var bitmap *Bitmap
-		if err := rows.Scan(&bitmap); err != nil {
+		var value string
+		if err := rows.Scan(&value); err != nil {
 			return nil, err
 		}
-		items = append(items, bitmap)
+		items = append(items, value)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -358,29 +392,31 @@ func (q *Queries) EvaluateStringAttributeValueGlob(ctx context.Context, arg Eval
 	return items, nil
 }
 
-const evaluateStringAttributeValueGreaterOrEqualThan = `-- name: EvaluateStringAttributeValueGreaterOrEqualThan :many
-SELECT bitmap FROM string_attributes_values_bitmaps
+const getMatchingStringValuesGreaterOrEqualThan = `-- name: GetMatchingStringValuesGreaterOrEqualThan :many
+SELECT DISTINCT value FROM string_attributes_values_bitmaps
 WHERE name = ?1 AND value >= ?2
+  AND block <= ?3
 `
 
-type EvaluateStringAttributeValueGreaterOrEqualThanParams struct {
-	Name  string
-	Value string
+type GetMatchingStringValuesGreaterOrEqualThanParams struct {
+	Name        string
+	Value       string
+	TargetBlock uint64
 }
 
-func (q *Queries) EvaluateStringAttributeValueGreaterOrEqualThan(ctx context.Context, arg EvaluateStringAttributeValueGreaterOrEqualThanParams) ([]*Bitmap, error) {
-	rows, err := q.query(ctx, q.evaluateStringAttributeValueGreaterOrEqualThanStmt, evaluateStringAttributeValueGreaterOrEqualThan, arg.Name, arg.Value)
+func (q *Queries) GetMatchingStringValuesGreaterOrEqualThan(ctx context.Context, arg GetMatchingStringValuesGreaterOrEqualThanParams) ([]string, error) {
+	rows, err := q.query(ctx, q.getMatchingStringValuesGreaterOrEqualThanStmt, getMatchingStringValuesGreaterOrEqualThan, arg.Name, arg.Value, arg.TargetBlock)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []*Bitmap{}
+	items := []string{}
 	for rows.Next() {
-		var bitmap *Bitmap
-		if err := rows.Scan(&bitmap); err != nil {
+		var value string
+		if err := rows.Scan(&value); err != nil {
 			return nil, err
 		}
-		items = append(items, bitmap)
+		items = append(items, value)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -391,29 +427,31 @@ func (q *Queries) EvaluateStringAttributeValueGreaterOrEqualThan(ctx context.Con
 	return items, nil
 }
 
-const evaluateStringAttributeValueGreaterThan = `-- name: EvaluateStringAttributeValueGreaterThan :many
-SELECT bitmap FROM string_attributes_values_bitmaps
+const getMatchingStringValuesGreaterThan = `-- name: GetMatchingStringValuesGreaterThan :many
+SELECT DISTINCT value FROM string_attributes_values_bitmaps
 WHERE name = ?1 AND value > ?2
+  AND block <= ?3
 `
 
-type EvaluateStringAttributeValueGreaterThanParams struct {
-	Name  string
-	Value string
+type GetMatchingStringValuesGreaterThanParams struct {
+	Name        string
+	Value       string
+	TargetBlock uint64
 }
 
-func (q *Queries) EvaluateStringAttributeValueGreaterThan(ctx context.Context, arg EvaluateStringAttributeValueGreaterThanParams) ([]*Bitmap, error) {
-	rows, err := q.query(ctx, q.evaluateStringAttributeValueGreaterThanStmt, evaluateStringAttributeValueGreaterThan, arg.Name, arg.Value)
+func (q *Queries) GetMatchingStringValuesGreaterThan(ctx context.Context, arg GetMatchingStringValuesGreaterThanParams) ([]string, error) {
+	rows, err := q.query(ctx, q.getMatchingStringValuesGreaterThanStmt, getMatchingStringValuesGreaterThan, arg.Name, arg.Value, arg.TargetBlock)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []*Bitmap{}
+	items := []string{}
 	for rows.Next() {
-		var bitmap *Bitmap
-		if err := rows.Scan(&bitmap); err != nil {
+		var value string
+		if err := rows.Scan(&value); err != nil {
 			return nil, err
 		}
-		items = append(items, bitmap)
+		items = append(items, value)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -424,18 +462,20 @@ func (q *Queries) EvaluateStringAttributeValueGreaterThan(ctx context.Context, a
 	return items, nil
 }
 
-const evaluateStringAttributeValueInclusion = `-- name: EvaluateStringAttributeValueInclusion :many
-SELECT bitmap FROM string_attributes_values_bitmaps
+const getMatchingStringValuesInclusion = `-- name: GetMatchingStringValuesInclusion :many
+SELECT DISTINCT value FROM string_attributes_values_bitmaps
 WHERE name = ?1 AND value IN (/*SLICE:values*/?)
+  AND block <= ?3
 `
 
-type EvaluateStringAttributeValueInclusionParams struct {
-	Name   string
-	Values []string
+type GetMatchingStringValuesInclusionParams struct {
+	Name        string
+	Values      []string
+	TargetBlock uint64
 }
 
-func (q *Queries) EvaluateStringAttributeValueInclusion(ctx context.Context, arg EvaluateStringAttributeValueInclusionParams) ([]*Bitmap, error) {
-	query := evaluateStringAttributeValueInclusion
+func (q *Queries) GetMatchingStringValuesInclusion(ctx context.Context, arg GetMatchingStringValuesInclusionParams) ([]string, error) {
+	query := getMatchingStringValuesInclusion
 	var queryParams []interface{}
 	queryParams = append(queryParams, arg.Name)
 	if len(arg.Values) > 0 {
@@ -446,18 +486,19 @@ func (q *Queries) EvaluateStringAttributeValueInclusion(ctx context.Context, arg
 	} else {
 		query = strings.Replace(query, "/*SLICE:values*/?", "NULL", 1)
 	}
+	queryParams = append(queryParams, arg.TargetBlock)
 	rows, err := q.query(ctx, nil, query, queryParams...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []*Bitmap{}
+	items := []string{}
 	for rows.Next() {
-		var bitmap *Bitmap
-		if err := rows.Scan(&bitmap); err != nil {
+		var value string
+		if err := rows.Scan(&value); err != nil {
 			return nil, err
 		}
-		items = append(items, bitmap)
+		items = append(items, value)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -468,29 +509,31 @@ func (q *Queries) EvaluateStringAttributeValueInclusion(ctx context.Context, arg
 	return items, nil
 }
 
-const evaluateStringAttributeValueLessOrEqualThan = `-- name: EvaluateStringAttributeValueLessOrEqualThan :many
-SELECT bitmap FROM string_attributes_values_bitmaps
+const getMatchingStringValuesLessOrEqualThan = `-- name: GetMatchingStringValuesLessOrEqualThan :many
+SELECT DISTINCT value FROM string_attributes_values_bitmaps
 WHERE name = ?1 AND value <= ?2
+  AND block <= ?3
 `
 
-type EvaluateStringAttributeValueLessOrEqualThanParams struct {
-	Name  string
-	Value string
+type GetMatchingStringValuesLessOrEqualThanParams struct {
+	Name        string
+	Value       string
+	TargetBlock uint64
 }
 
-func (q *Queries) EvaluateStringAttributeValueLessOrEqualThan(ctx context.Context, arg EvaluateStringAttributeValueLessOrEqualThanParams) ([]*Bitmap, error) {
-	rows, err := q.query(ctx, q.evaluateStringAttributeValueLessOrEqualThanStmt, evaluateStringAttributeValueLessOrEqualThan, arg.Name, arg.Value)
+func (q *Queries) GetMatchingStringValuesLessOrEqualThan(ctx context.Context, arg GetMatchingStringValuesLessOrEqualThanParams) ([]string, error) {
+	rows, err := q.query(ctx, q.getMatchingStringValuesLessOrEqualThanStmt, getMatchingStringValuesLessOrEqualThan, arg.Name, arg.Value, arg.TargetBlock)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []*Bitmap{}
+	items := []string{}
 	for rows.Next() {
-		var bitmap *Bitmap
-		if err := rows.Scan(&bitmap); err != nil {
+		var value string
+		if err := rows.Scan(&value); err != nil {
 			return nil, err
 		}
-		items = append(items, bitmap)
+		items = append(items, value)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -501,29 +544,31 @@ func (q *Queries) EvaluateStringAttributeValueLessOrEqualThan(ctx context.Contex
 	return items, nil
 }
 
-const evaluateStringAttributeValueLowerThan = `-- name: EvaluateStringAttributeValueLowerThan :many
-SELECT bitmap FROM string_attributes_values_bitmaps
+const getMatchingStringValuesLessThan = `-- name: GetMatchingStringValuesLessThan :many
+SELECT DISTINCT value FROM string_attributes_values_bitmaps
 WHERE name = ?1 AND value < ?2
+  AND block <= ?3
 `
 
-type EvaluateStringAttributeValueLowerThanParams struct {
-	Name  string
-	Value string
+type GetMatchingStringValuesLessThanParams struct {
+	Name        string
+	Value       string
+	TargetBlock uint64
 }
 
-func (q *Queries) EvaluateStringAttributeValueLowerThan(ctx context.Context, arg EvaluateStringAttributeValueLowerThanParams) ([]*Bitmap, error) {
-	rows, err := q.query(ctx, q.evaluateStringAttributeValueLowerThanStmt, evaluateStringAttributeValueLowerThan, arg.Name, arg.Value)
+func (q *Queries) GetMatchingStringValuesLessThan(ctx context.Context, arg GetMatchingStringValuesLessThanParams) ([]string, error) {
+	rows, err := q.query(ctx, q.getMatchingStringValuesLessThanStmt, getMatchingStringValuesLessThan, arg.Name, arg.Value, arg.TargetBlock)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []*Bitmap{}
+	items := []string{}
 	for rows.Next() {
-		var bitmap *Bitmap
-		if err := rows.Scan(&bitmap); err != nil {
+		var value string
+		if err := rows.Scan(&value); err != nil {
 			return nil, err
 		}
-		items = append(items, bitmap)
+		items = append(items, value)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -534,29 +579,31 @@ func (q *Queries) EvaluateStringAttributeValueLowerThan(ctx context.Context, arg
 	return items, nil
 }
 
-const evaluateStringAttributeValueNotEqual = `-- name: EvaluateStringAttributeValueNotEqual :many
-SELECT bitmap FROM string_attributes_values_bitmaps
+const getMatchingStringValuesNotEqual = `-- name: GetMatchingStringValuesNotEqual :many
+SELECT DISTINCT value FROM string_attributes_values_bitmaps
 WHERE name = ?1 AND value != ?2
+  AND block <= ?3
 `
 
-type EvaluateStringAttributeValueNotEqualParams struct {
-	Name  string
-	Value string
+type GetMatchingStringValuesNotEqualParams struct {
+	Name        string
+	Value       string
+	TargetBlock uint64
 }
 
-func (q *Queries) EvaluateStringAttributeValueNotEqual(ctx context.Context, arg EvaluateStringAttributeValueNotEqualParams) ([]*Bitmap, error) {
-	rows, err := q.query(ctx, q.evaluateStringAttributeValueNotEqualStmt, evaluateStringAttributeValueNotEqual, arg.Name, arg.Value)
+func (q *Queries) GetMatchingStringValuesNotEqual(ctx context.Context, arg GetMatchingStringValuesNotEqualParams) ([]string, error) {
+	rows, err := q.query(ctx, q.getMatchingStringValuesNotEqualStmt, getMatchingStringValuesNotEqual, arg.Name, arg.Value, arg.TargetBlock)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []*Bitmap{}
+	items := []string{}
 	for rows.Next() {
-		var bitmap *Bitmap
-		if err := rows.Scan(&bitmap); err != nil {
+		var value string
+		if err := rows.Scan(&value); err != nil {
 			return nil, err
 		}
-		items = append(items, bitmap)
+		items = append(items, value)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -567,29 +614,31 @@ func (q *Queries) EvaluateStringAttributeValueNotEqual(ctx context.Context, arg 
 	return items, nil
 }
 
-const evaluateStringAttributeValueNotGlob = `-- name: EvaluateStringAttributeValueNotGlob :many
-SELECT bitmap FROM string_attributes_values_bitmaps
+const getMatchingStringValuesNotGlob = `-- name: GetMatchingStringValuesNotGlob :many
+SELECT DISTINCT value FROM string_attributes_values_bitmaps
 WHERE name = ?1 AND value NOT GLOB ?2
+  AND block <= ?3
 `
 
-type EvaluateStringAttributeValueNotGlobParams struct {
-	Name  string
-	Value string
+type GetMatchingStringValuesNotGlobParams struct {
+	Name        string
+	Value       string
+	TargetBlock uint64
 }
 
-func (q *Queries) EvaluateStringAttributeValueNotGlob(ctx context.Context, arg EvaluateStringAttributeValueNotGlobParams) ([]*Bitmap, error) {
-	rows, err := q.query(ctx, q.evaluateStringAttributeValueNotGlobStmt, evaluateStringAttributeValueNotGlob, arg.Name, arg.Value)
+func (q *Queries) GetMatchingStringValuesNotGlob(ctx context.Context, arg GetMatchingStringValuesNotGlobParams) ([]string, error) {
+	rows, err := q.query(ctx, q.getMatchingStringValuesNotGlobStmt, getMatchingStringValuesNotGlob, arg.Name, arg.Value, arg.TargetBlock)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []*Bitmap{}
+	items := []string{}
 	for rows.Next() {
-		var bitmap *Bitmap
-		if err := rows.Scan(&bitmap); err != nil {
+		var value string
+		if err := rows.Scan(&value); err != nil {
 			return nil, err
 		}
-		items = append(items, bitmap)
+		items = append(items, value)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -600,18 +649,20 @@ func (q *Queries) EvaluateStringAttributeValueNotGlob(ctx context.Context, arg E
 	return items, nil
 }
 
-const evaluateStringAttributeValueNotInclusion = `-- name: EvaluateStringAttributeValueNotInclusion :many
-SELECT bitmap FROM string_attributes_values_bitmaps
+const getMatchingStringValuesNotInclusion = `-- name: GetMatchingStringValuesNotInclusion :many
+SELECT DISTINCT value FROM string_attributes_values_bitmaps
 WHERE name = ?1 AND value NOT IN (/*SLICE:values*/?)
+  AND block <= ?3
 `
 
-type EvaluateStringAttributeValueNotInclusionParams struct {
-	Name   string
-	Values []string
+type GetMatchingStringValuesNotInclusionParams struct {
+	Name        string
+	Values      []string
+	TargetBlock uint64
 }
 
-func (q *Queries) EvaluateStringAttributeValueNotInclusion(ctx context.Context, arg EvaluateStringAttributeValueNotInclusionParams) ([]*Bitmap, error) {
-	query := evaluateStringAttributeValueNotInclusion
+func (q *Queries) GetMatchingStringValuesNotInclusion(ctx context.Context, arg GetMatchingStringValuesNotInclusionParams) ([]string, error) {
+	query := getMatchingStringValuesNotInclusion
 	var queryParams []interface{}
 	queryParams = append(queryParams, arg.Name)
 	if len(arg.Values) > 0 {
@@ -622,18 +673,19 @@ func (q *Queries) EvaluateStringAttributeValueNotInclusion(ctx context.Context, 
 	} else {
 		query = strings.Replace(query, "/*SLICE:values*/?", "NULL", 1)
 	}
+	queryParams = append(queryParams, arg.TargetBlock)
 	rows, err := q.query(ctx, nil, query, queryParams...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []*Bitmap{}
+	items := []string{}
 	for rows.Next() {
-		var bitmap *Bitmap
-		if err := rows.Scan(&bitmap); err != nil {
+		var value string
+		if err := rows.Scan(&value); err != nil {
 			return nil, err
 		}
-		items = append(items, bitmap)
+		items = append(items, value)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

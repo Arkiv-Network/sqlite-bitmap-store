@@ -25,7 +25,6 @@ import (
 )
 
 var (
-	// Metrics for tracking operations
 	metricOperationStarted    = metrics.NewRegisteredCounter("arkiv_store/operations_started", nil)
 	metricOperationSuccessful = metrics.NewRegisteredCounter("arkiv_store/operations_successful", nil)
 	metricCreates             = metrics.NewRegisteredCounter("arkiv_store/creates", nil)
@@ -36,10 +35,7 @@ var (
 	metricDeletesBytes        = metrics.NewRegisteredCounter("arkiv_store/deletes_bytes", nil)
 	metricExtends             = metrics.NewRegisteredCounter("arkiv_store/extends", nil)
 	metricOwnerChanges        = metrics.NewRegisteredCounter("arkiv_store/owner_changes", nil)
-	// Tracks operation duration (ms) using an exponential decay sample so the histogram
-	// is more responsive to recent performance by weighting newer measurements higher
-	// (sample size 100, alpha 0.4).
-	metricOperationTime = metrics.NewRegisteredHistogram("arkiv_store/operation_time_ms", nil, metrics.NewExpDecaySample(100, 0.4))
+	metricOperationTime       = metrics.NewRegisteredHistogram("arkiv_store/operation_time_ms", nil, metrics.NewExpDecaySample(100, 0.4))
 )
 
 type SQLiteStore struct {
@@ -136,7 +132,6 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 			return fmt.Errorf("failed to follow events: %w", batch.Error)
 		}
 
-		// We will calculate totals for the log at the end, but track per-block for metrics
 		stats := make(map[uint64]*blockStats)
 
 		err := func() error {
@@ -161,8 +156,6 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 				return fmt.Errorf("failed to get last block from database: %w", err)
 			}
 
-			cache := newBitmapCache(st)
-
 			startTime := time.Now()
 
 			metricOperationStarted.Inc(1)
@@ -175,11 +168,13 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 					continue mainLoop
 				}
 
-				// Initialize stats for this block
 				if _, ok := stats[block.Number]; !ok {
 					stats[block.Number] = &blockStats{}
 				}
 				blockStat := stats[block.Number]
+
+				// Per-block bitmap cache for bitemporality.
+				cache := newBitmapCache(st, block.Number)
 
 				updatesMap := map[common.Hash][]*events.OPUpdate{}
 
@@ -197,13 +192,11 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 					switch {
 
 					case operation.Create != nil:
-						// expiresAtBlock := blockNumber + operation.Create.BTL
 						blockStat.creates++
 						blockStat.createsBytes += int64(len(operation.Create.Content))
 						key := operation.Create.Key
 
 						stringAttributes := maps.Clone(operation.Create.StringAttributes)
-
 						stringAttributes["$owner"] = strings.ToLower(operation.Create.Owner.Hex())
 						stringAttributes["$creator"] = strings.ToLower(operation.Create.Owner.Hex())
 						stringAttributes["$key"] = strings.ToLower(key.Hex())
@@ -219,14 +212,21 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						numericAttributes["$txIndex"] = uint64(operation.TxIndex)
 						numericAttributes["$opIndex"] = uint64(operation.OpIndex)
 
-						id, err := st.UpsertPayload(
+						// Close any existing version (handles re-creation after delete).
+						_ = st.ClosePayloadVersion(ctx, store.ClosePayloadVersionParams{
+							Block:     &block.Number,
+							EntityKey: operation.Create.Key.Bytes(),
+						})
+
+						id, err := st.InsertPayload(
 							ctx,
-							store.UpsertPayloadParams{
+							store.InsertPayloadParams{
 								EntityKey:         operation.Create.Key.Bytes(),
 								Payload:           operation.Create.Content,
 								ContentType:       operation.Create.ContentType,
 								StringAttributes:  store.NewStringAttributes(stringAttributes),
 								NumericAttributes: store.NewNumericAttributes(numericAttributes),
+								FromBlock:         block.Number,
 							},
 						)
 						if err != nil {
@@ -241,20 +241,17 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						}
 
 						for k, v := range numericAttributes {
-
-							// skip txIndex and opIndex because they are not used for querying
 							switch k {
 							case "$txIndex", "$opIndex":
 								continue
 							}
-
 							err = cache.AddToNumericBitmap(ctx, k, v, id)
 							if err != nil {
 								return fmt.Errorf("failed to add numeric attribute value bitmap: %w", err)
 							}
 						}
-					case operation.Update != nil:
 
+					case operation.Update != nil:
 						updates := updatesMap[operation.Update.Key]
 						lastUpdate := updates[len(updates)-1]
 
@@ -266,17 +263,16 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 						key := operation.Update.Key.Bytes()
 
-						latestPayload, err := st.GetPayloadForEntityKey(ctx, key)
+						latestPayload, err := st.GetCurrentPayloadForEntityKey(ctx, key)
 						if err != nil {
 							return fmt.Errorf("failed to get latest payload: %w", err)
 						}
+						oldID := latestPayload.ID
 
 						oldStringAttributes := latestPayload.StringAttributes
-
 						oldNumericAttributes := latestPayload.NumericAttributes
 
 						stringAttributes := maps.Clone(operation.Update.StringAttributes)
-
 						stringAttributes["$owner"] = strings.ToLower(operation.Update.Owner.Hex())
 						stringAttributes["$creator"] = oldStringAttributes.Values["$creator"]
 						stringAttributes["$key"] = strings.ToLower(operation.Update.Key.Hex())
@@ -285,20 +281,28 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						numericAttributes := maps.Clone(operation.Update.NumericAttributes)
 						numericAttributes["$expiration"] = uint64(untilBlock)
 						numericAttributes["$createdAtBlock"] = oldNumericAttributes.Values["$createdAtBlock"]
-
 						numericAttributes["$sequence"] = oldNumericAttributes.Values["$sequence"]
 						numericAttributes["$txIndex"] = oldNumericAttributes.Values["$txIndex"]
 						numericAttributes["$opIndex"] = oldNumericAttributes.Values["$opIndex"]
 						numericAttributes["$lastModifiedAtBlock"] = uint64(block.Number)
 
-						id, err := st.UpsertPayload(
+						err = st.ClosePayloadVersion(ctx, store.ClosePayloadVersionParams{
+							Block:     &block.Number,
+							EntityKey: key,
+						})
+						if err != nil {
+							return fmt.Errorf("failed to close payload version: %w", err)
+						}
+
+						newID, err := st.InsertPayload(
 							ctx,
-							store.UpsertPayloadParams{
+							store.InsertPayloadParams{
 								EntityKey:         key,
 								Payload:           operation.Update.Content,
 								ContentType:       operation.Update.ContentType,
 								StringAttributes:  store.NewStringAttributes(stringAttributes),
 								NumericAttributes: store.NewNumericAttributes(numericAttributes),
+								FromBlock:         block.Number,
 							},
 						)
 						if err != nil {
@@ -306,49 +310,42 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						}
 
 						for k, v := range oldStringAttributes.Values {
-							err = cache.RemoveFromStringBitmap(ctx, k, v, id)
+							err = cache.RemoveFromStringBitmap(ctx, k, v, oldID)
 							if err != nil {
 								return fmt.Errorf("failed to remove string attribute value bitmap: %w", err)
 							}
 						}
 
 						for k, v := range oldNumericAttributes.Values {
-							// skip txIndex and opIndex because they are not used for querying
 							switch k {
 							case "$txIndex", "$opIndex":
 								continue
 							}
-
-							err = cache.RemoveFromNumericBitmap(ctx, k, v, id)
+							err = cache.RemoveFromNumericBitmap(ctx, k, v, oldID)
 							if err != nil {
 								return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
 							}
 						}
 
-						// TODO: delete entity from the indexes
-
 						for k, v := range stringAttributes {
-							err = cache.AddToStringBitmap(ctx, k, v, id)
+							err = cache.AddToStringBitmap(ctx, k, v, newID)
 							if err != nil {
 								return fmt.Errorf("failed to add string attribute value bitmap: %w", err)
 							}
 						}
 
 						for k, v := range numericAttributes {
-							// skip txIndex and opIndex because they are not used for querying
 							switch k {
 							case "$txIndex", "$opIndex":
 								continue
 							}
-
-							err = cache.AddToNumericBitmap(ctx, k, v, id)
+							err = cache.AddToNumericBitmap(ctx, k, v, newID)
 							if err != nil {
 								return fmt.Errorf("failed to add numeric attribute value bitmap: %w", err)
 							}
 						}
 
 					case operation.Delete != nil || operation.Expire != nil:
-
 						blockStat.deletes++
 						var key []byte
 						if operation.Delete != nil {
@@ -357,78 +354,80 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 							key = common.Hash(*operation.Expire).Bytes()
 						}
 
-						latestPayload, err := st.GetPayloadForEntityKey(ctx, key)
+						latestPayload, err := st.GetCurrentPayloadForEntityKey(ctx, key)
 						if err != nil {
 							return fmt.Errorf("failed to get latest payload: %w", err)
 						}
 						blockStat.deletesBytes += int64(len(latestPayload.Payload))
 
-						oldStringAttributes := latestPayload.StringAttributes
-
-						oldNumericAttributes := latestPayload.NumericAttributes
-
-						for k, v := range oldStringAttributes.Values {
+						for k, v := range latestPayload.StringAttributes.Values {
 							err = cache.RemoveFromStringBitmap(ctx, k, v, latestPayload.ID)
 							if err != nil {
 								return fmt.Errorf("failed to remove string attribute value bitmap: %w", err)
 							}
 						}
 
-						for k, v := range oldNumericAttributes.Values {
-							// skip txIndex and opIndex because they are not used for querying
+						for k, v := range latestPayload.NumericAttributes.Values {
 							switch k {
 							case "$txIndex", "$opIndex":
 								continue
 							}
-
 							err = cache.RemoveFromNumericBitmap(ctx, k, v, latestPayload.ID)
 							if err != nil {
 								return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
 							}
 						}
 
-						err = st.DeletePayloadForEntityKey(ctx, key)
+						err = st.ClosePayloadVersion(ctx, store.ClosePayloadVersionParams{
+							Block:     &block.Number,
+							EntityKey: key,
+						})
 						if err != nil {
-							return fmt.Errorf("failed to delete payload: %w", err)
+							return fmt.Errorf("failed to close payload version: %w", err)
 						}
 
 					case operation.ExtendBTL != nil:
-
 						blockStat.extends++
 
 						key := operation.ExtendBTL.Key.Bytes()
 
-						latestPayload, err := st.GetPayloadForEntityKey(ctx, key)
+						latestPayload, err := st.GetCurrentPayloadForEntityKey(ctx, key)
 						if err != nil {
 							return fmt.Errorf("failed to get latest payload: %w", err)
 						}
-
-						oldNumericAttributes := latestPayload.NumericAttributes
-
-						oldExpiration := oldNumericAttributes.Values["$expiration"]
-
+						oldID := latestPayload.ID
+						oldExpiration := latestPayload.NumericAttributes.Values["$expiration"]
 						newToBlock := oldExpiration + operation.ExtendBTL.BTL
 
-						numericAttributes := maps.Clone(oldNumericAttributes.Values)
+						numericAttributes := maps.Clone(latestPayload.NumericAttributes.Values)
 						numericAttributes["$expiration"] = uint64(newToBlock)
 
-						id, err := st.UpsertPayload(ctx, store.UpsertPayloadParams{
+						err = st.ClosePayloadVersion(ctx, store.ClosePayloadVersionParams{
+							Block:     &block.Number,
+							EntityKey: key,
+						})
+						if err != nil {
+							return fmt.Errorf("failed to close payload version: %w", err)
+						}
+
+						newID, err := st.InsertPayload(ctx, store.InsertPayloadParams{
 							EntityKey:         key,
 							Payload:           latestPayload.Payload,
 							ContentType:       latestPayload.ContentType,
 							StringAttributes:  latestPayload.StringAttributes,
 							NumericAttributes: store.NewNumericAttributes(numericAttributes),
+							FromBlock:         block.Number,
 						})
 						if err != nil {
 							return fmt.Errorf("failed to insert payload at block %d txIndex %d opIndex %d: %w", block.Number, operation.TxIndex, operation.OpIndex, err)
 						}
 
-						err = cache.RemoveFromNumericBitmap(ctx, "$expiration", oldExpiration, id)
+						err = cache.RemoveFromNumericBitmap(ctx, "$expiration", oldExpiration, oldID)
 						if err != nil {
 							return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
 						}
 
-						err = cache.AddToNumericBitmap(ctx, "$expiration", newToBlock, id)
+						err = cache.AddToNumericBitmap(ctx, "$expiration", newToBlock, newID)
 						if err != nil {
 							return fmt.Errorf("failed to add numeric attribute value bitmap: %w", err)
 						}
@@ -437,39 +436,46 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						blockStat.ownerChanges++
 						key := operation.ChangeOwner.Key.Bytes()
 
-						latestPayload, err := st.GetPayloadForEntityKey(ctx, key)
+						latestPayload, err := st.GetCurrentPayloadForEntityKey(ctx, key)
 						if err != nil {
 							return fmt.Errorf("failed to get latest payload: %w", err)
 						}
-
-						stringAttributes := latestPayload.StringAttributes
-
-						oldOwner := stringAttributes.Values["$owner"]
-
+						oldID := latestPayload.ID
+						oldOwner := latestPayload.StringAttributes.Values["$owner"]
 						newOwner := strings.ToLower(operation.ChangeOwner.Owner.Hex())
 
-						stringAttributes.Values["$owner"] = newOwner
+						newStringAttrs := &store.StringAttributes{Values: maps.Clone(latestPayload.StringAttributes.Values)}
+						newStringAttrs.Values["$owner"] = newOwner
 
-						id, err := st.UpsertPayload(
+						err = st.ClosePayloadVersion(ctx, store.ClosePayloadVersionParams{
+							Block:     &block.Number,
+							EntityKey: key,
+						})
+						if err != nil {
+							return fmt.Errorf("failed to close payload version: %w", err)
+						}
+
+						newID, err := st.InsertPayload(
 							ctx,
-							store.UpsertPayloadParams{
+							store.InsertPayloadParams{
 								EntityKey:         key,
 								Payload:           latestPayload.Payload,
 								ContentType:       latestPayload.ContentType,
-								StringAttributes:  stringAttributes,
+								StringAttributes:  newStringAttrs,
 								NumericAttributes: latestPayload.NumericAttributes,
+								FromBlock:         block.Number,
 							},
 						)
 						if err != nil {
 							return fmt.Errorf("failed to insert payload at block %d txIndex %d opIndex %d: %w", block.Number, operation.TxIndex, operation.OpIndex, err)
 						}
 
-						err = cache.RemoveFromStringBitmap(ctx, "$owner", oldOwner, id)
+						err = cache.RemoveFromStringBitmap(ctx, "$owner", oldOwner, oldID)
 						if err != nil {
 							return fmt.Errorf("failed to remove string attribute value bitmap for owner: %w", err)
 						}
 
-						err = cache.AddToStringBitmap(ctx, "$owner", newOwner, id)
+						err = cache.AddToStringBitmap(ctx, "$owner", newOwner, newID)
 						if err != nil {
 							return fmt.Errorf("failed to add string attribute value bitmap for owner: %w", err)
 						}
@@ -480,7 +486,11 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 				}
 
-				// Log per block if needed, but we can now rely on the map for totals later
+				err = cache.Flush(ctx)
+				if err != nil {
+					return fmt.Errorf("failed to flush bitmap cache for block %d: %w", block.Number, err)
+				}
+
 				s.log.Info("block updated", "block", block.Number, "creates", blockStat.creates, "updates", blockStat.updates, "deletes", blockStat.deletes, "extends", blockStat.extends, "ownerChanges", blockStat.ownerChanges)
 			}
 
@@ -489,17 +499,11 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 				return fmt.Errorf("failed to upsert last block: %w", err)
 			}
 
-			err = cache.Flush(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to flush bitmap cache: %w", err)
-			}
-
 			err = tx.Commit()
 			if err != nil {
 				return fmt.Errorf("failed to commit transaction: %w", err)
 			}
 
-			// Calculate batch totals for logging and update metrics PER BLOCK
 			var (
 				totalCreates      int64
 				totalCreatesBytes int64
@@ -511,7 +515,6 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 				totalOwnerChanges int64
 			)
 
-			// Iterate blocks again to preserve order and update metrics per block
 			for _, block := range batch.Batch.Blocks {
 				if stat, ok := stats[block.Number]; ok {
 					totalCreates += stat.creates
@@ -523,7 +526,6 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 					totalExtends += stat.extends
 					totalOwnerChanges += stat.ownerChanges
 
-					// Update metrics specifically per block
 					if stat.creates > 0 {
 						metricCreates.Inc(stat.creates)
 					}

@@ -99,7 +99,7 @@ var _ = Describe("PushIterator", func() {
 			var payload []byte
 			var contentType string
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
+				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
 				if err != nil {
 					return err
 				}
@@ -174,13 +174,13 @@ var _ = Describe("PushIterator", func() {
 			Expect(lastBlock).To(Equal(uint64(101)))
 
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row1, err := q.GetPayloadForEntityKey(ctx, key1.Bytes())
+				row1, err := q.GetCurrentPayloadForEntityKey(ctx, key1.Bytes())
 				if err != nil {
 					return err
 				}
 				Expect(row1.Payload).To(Equal([]byte("first entity")))
 
-				row2, err := q.GetPayloadForEntityKey(ctx, key2.Bytes())
+				row2, err := q.GetCurrentPayloadForEntityKey(ctx, key2.Bytes())
 				if err != nil {
 					return err
 				}
@@ -263,7 +263,7 @@ var _ = Describe("PushIterator", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
+				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
 				if err != nil {
 					return err
 				}
@@ -341,7 +341,7 @@ var _ = Describe("PushIterator", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				_, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
+				_, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).To(HaveOccurred())
 				return nil
 			})
@@ -388,7 +388,7 @@ var _ = Describe("PushIterator", func() {
 
 			var originalExpiration uint64
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
+				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
 				if err != nil {
 					return err
 				}
@@ -428,7 +428,7 @@ var _ = Describe("PushIterator", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
+				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
 				if err != nil {
 					return err
 				}
@@ -479,7 +479,7 @@ var _ = Describe("PushIterator", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
+				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
 				if err != nil {
 					return err
 				}
@@ -518,7 +518,7 @@ var _ = Describe("PushIterator", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
+				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
 				if err != nil {
 					return err
 				}
@@ -597,13 +597,13 @@ var _ = Describe("PushIterator", func() {
 			Expect(lastBlock).To(Equal(uint64(101)))
 
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row1, err := q.GetPayloadForEntityKey(ctx, key1.Bytes())
+				row1, err := q.GetCurrentPayloadForEntityKey(ctx, key1.Bytes())
 				if err != nil {
 					return err
 				}
 				Expect(row1.Payload).To(Equal([]byte("batch 1")))
 
-				row2, err := q.GetPayloadForEntityKey(ctx, key2.Bytes())
+				row2, err := q.GetCurrentPayloadForEntityKey(ctx, key2.Bytes())
 				if err != nil {
 					return err
 				}
@@ -686,7 +686,7 @@ var _ = Describe("PushIterator", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
+				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
 				if err != nil {
 					return err
 				}
@@ -735,7 +735,7 @@ var _ = Describe("PushIterator", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
+				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
 				if err != nil {
 					return err
 				}

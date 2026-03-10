@@ -10,9 +10,11 @@ type LastBlock struct {
 }
 
 type NumericAttributesValuesBitmap struct {
-	Name   string
-	Value  uint64
-	Bitmap *Bitmap
+	Name         string
+	Value        uint64
+	Block        uint64
+	IsFullBitmap bool
+	Bitmap       *Bitmap
 }
 
 type Payload struct {
@@ -22,10 +24,14 @@ type Payload struct {
 	ContentType       string
 	StringAttributes  *StringAttributes
 	NumericAttributes *NumericAttributes
+	FromBlock         uint64
+	ToBlock           *uint64
 }
 
 type StringAttributesValuesBitmap struct {
-	Name   string
-	Value  string
-	Bitmap *Bitmap
+	Name         string
+	Value        string
+	Block        uint64
+	IsFullBitmap bool
+	Bitmap       *Bitmap
 }

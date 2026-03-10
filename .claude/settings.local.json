@@ -9,7 +9,9 @@
       "Bash(go get:*)",
       "Bash(go test:*)",
       "Bash(go mod tidy:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(grep:*)",
+      "Bash(go vet:*)"
     ]
   }
 }

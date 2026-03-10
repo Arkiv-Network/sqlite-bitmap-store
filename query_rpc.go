@@ -157,6 +157,7 @@ func (s *SQLiteStore) QueryEntities(
 		bitmap, err := q.Evaluate(
 			ctx,
 			queries,
+			options.GetAtBlock(),
 		)
 		if err != nil {
 			return fmt.Errorf("error evaluating query: %w", err)

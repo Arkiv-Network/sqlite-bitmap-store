@@ -24,86 +24,137 @@ func New(db DBTX) *Queries {
 func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	q := Queries{db: db}
 	var err error
-	if q.deleteNumericAttributeValueBitmapStmt, err = db.PrepareContext(ctx, deleteNumericAttributeValueBitmap); err != nil {
-		return nil, fmt.Errorf("error preparing query DeleteNumericAttributeValueBitmap: %w", err)
+	if q.closePayloadVersionStmt, err = db.PrepareContext(ctx, closePayloadVersion); err != nil {
+		return nil, fmt.Errorf("error preparing query ClosePayloadVersion: %w", err)
 	}
-	if q.deletePayloadForEntityKeyStmt, err = db.PrepareContext(ctx, deletePayloadForEntityKey); err != nil {
-		return nil, fmt.Errorf("error preparing query DeletePayloadForEntityKey: %w", err)
+	if q.countDeltasSinceLastKeyframeNumericStmt, err = db.PrepareContext(ctx, countDeltasSinceLastKeyframeNumeric); err != nil {
+		return nil, fmt.Errorf("error preparing query CountDeltasSinceLastKeyframeNumeric: %w", err)
 	}
-	if q.deleteStringAttributeValueBitmapStmt, err = db.PrepareContext(ctx, deleteStringAttributeValueBitmap); err != nil {
-		return nil, fmt.Errorf("error preparing query DeleteStringAttributeValueBitmap: %w", err)
+	if q.countDeltasSinceLastKeyframeStringStmt, err = db.PrepareContext(ctx, countDeltasSinceLastKeyframeString); err != nil {
+		return nil, fmt.Errorf("error preparing query CountDeltasSinceLastKeyframeString: %w", err)
 	}
-	if q.evaluateAllStmt, err = db.PrepareContext(ctx, evaluateAll); err != nil {
-		return nil, fmt.Errorf("error preparing query EvaluateAll: %w", err)
+	if q.evaluateAllAtBlockStmt, err = db.PrepareContext(ctx, evaluateAllAtBlock); err != nil {
+		return nil, fmt.Errorf("error preparing query EvaluateAllAtBlock: %w", err)
 	}
-	if q.evaluateNumericAttributeValueEqualStmt, err = db.PrepareContext(ctx, evaluateNumericAttributeValueEqual); err != nil {
-		return nil, fmt.Errorf("error preparing query EvaluateNumericAttributeValueEqual: %w", err)
+	if q.evaluateAllCurrentStmt, err = db.PrepareContext(ctx, evaluateAllCurrent); err != nil {
+		return nil, fmt.Errorf("error preparing query EvaluateAllCurrent: %w", err)
 	}
-	if q.evaluateNumericAttributeValueGreaterOrEqualThanStmt, err = db.PrepareContext(ctx, evaluateNumericAttributeValueGreaterOrEqualThan); err != nil {
-		return nil, fmt.Errorf("error preparing query EvaluateNumericAttributeValueGreaterOrEqualThan: %w", err)
+	if q.getAllNumericBitmapEntriesFromStmt, err = db.PrepareContext(ctx, getAllNumericBitmapEntriesFrom); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAllNumericBitmapEntriesFrom: %w", err)
 	}
-	if q.evaluateNumericAttributeValueGreaterThanStmt, err = db.PrepareContext(ctx, evaluateNumericAttributeValueGreaterThan); err != nil {
-		return nil, fmt.Errorf("error preparing query EvaluateNumericAttributeValueGreaterThan: %w", err)
+	if q.getAllStringBitmapEntriesFromStmt, err = db.PrepareContext(ctx, getAllStringBitmapEntriesFrom); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAllStringBitmapEntriesFrom: %w", err)
 	}
-	if q.evaluateNumericAttributeValueInclusionStmt, err = db.PrepareContext(ctx, evaluateNumericAttributeValueInclusion); err != nil {
-		return nil, fmt.Errorf("error preparing query EvaluateNumericAttributeValueInclusion: %w", err)
-	}
-	if q.evaluateNumericAttributeValueLessOrEqualThanStmt, err = db.PrepareContext(ctx, evaluateNumericAttributeValueLessOrEqualThan); err != nil {
-		return nil, fmt.Errorf("error preparing query EvaluateNumericAttributeValueLessOrEqualThan: %w", err)
-	}
-	if q.evaluateNumericAttributeValueLowerThanStmt, err = db.PrepareContext(ctx, evaluateNumericAttributeValueLowerThan); err != nil {
-		return nil, fmt.Errorf("error preparing query EvaluateNumericAttributeValueLowerThan: %w", err)
-	}
-	if q.evaluateNumericAttributeValueNotEqualStmt, err = db.PrepareContext(ctx, evaluateNumericAttributeValueNotEqual); err != nil {
-		return nil, fmt.Errorf("error preparing query EvaluateNumericAttributeValueNotEqual: %w", err)
-	}
-	if q.evaluateNumericAttributeValueNotInclusionStmt, err = db.PrepareContext(ctx, evaluateNumericAttributeValueNotInclusion); err != nil {
-		return nil, fmt.Errorf("error preparing query EvaluateNumericAttributeValueNotInclusion: %w", err)
-	}
-	if q.evaluateStringAttributeValueEqualStmt, err = db.PrepareContext(ctx, evaluateStringAttributeValueEqual); err != nil {
-		return nil, fmt.Errorf("error preparing query EvaluateStringAttributeValueEqual: %w", err)
-	}
-	if q.evaluateStringAttributeValueGlobStmt, err = db.PrepareContext(ctx, evaluateStringAttributeValueGlob); err != nil {
-		return nil, fmt.Errorf("error preparing query EvaluateStringAttributeValueGlob: %w", err)
-	}
-	if q.evaluateStringAttributeValueGreaterOrEqualThanStmt, err = db.PrepareContext(ctx, evaluateStringAttributeValueGreaterOrEqualThan); err != nil {
-		return nil, fmt.Errorf("error preparing query EvaluateStringAttributeValueGreaterOrEqualThan: %w", err)
-	}
-	if q.evaluateStringAttributeValueGreaterThanStmt, err = db.PrepareContext(ctx, evaluateStringAttributeValueGreaterThan); err != nil {
-		return nil, fmt.Errorf("error preparing query EvaluateStringAttributeValueGreaterThan: %w", err)
-	}
-	if q.evaluateStringAttributeValueInclusionStmt, err = db.PrepareContext(ctx, evaluateStringAttributeValueInclusion); err != nil {
-		return nil, fmt.Errorf("error preparing query EvaluateStringAttributeValueInclusion: %w", err)
-	}
-	if q.evaluateStringAttributeValueLessOrEqualThanStmt, err = db.PrepareContext(ctx, evaluateStringAttributeValueLessOrEqualThan); err != nil {
-		return nil, fmt.Errorf("error preparing query EvaluateStringAttributeValueLessOrEqualThan: %w", err)
-	}
-	if q.evaluateStringAttributeValueLowerThanStmt, err = db.PrepareContext(ctx, evaluateStringAttributeValueLowerThan); err != nil {
-		return nil, fmt.Errorf("error preparing query EvaluateStringAttributeValueLowerThan: %w", err)
-	}
-	if q.evaluateStringAttributeValueNotEqualStmt, err = db.PrepareContext(ctx, evaluateStringAttributeValueNotEqual); err != nil {
-		return nil, fmt.Errorf("error preparing query EvaluateStringAttributeValueNotEqual: %w", err)
-	}
-	if q.evaluateStringAttributeValueNotGlobStmt, err = db.PrepareContext(ctx, evaluateStringAttributeValueNotGlob); err != nil {
-		return nil, fmt.Errorf("error preparing query EvaluateStringAttributeValueNotGlob: %w", err)
-	}
-	if q.evaluateStringAttributeValueNotInclusionStmt, err = db.PrepareContext(ctx, evaluateStringAttributeValueNotInclusion); err != nil {
-		return nil, fmt.Errorf("error preparing query EvaluateStringAttributeValueNotInclusion: %w", err)
+	if q.getCurrentPayloadForEntityKeyStmt, err = db.PrepareContext(ctx, getCurrentPayloadForEntityKey); err != nil {
+		return nil, fmt.Errorf("error preparing query GetCurrentPayloadForEntityKey: %w", err)
 	}
 	if q.getLastBlockStmt, err = db.PrepareContext(ctx, getLastBlock); err != nil {
 		return nil, fmt.Errorf("error preparing query GetLastBlock: %w", err)
 	}
+	if q.getLatestNumericKeyframeBlockStmt, err = db.PrepareContext(ctx, getLatestNumericKeyframeBlock); err != nil {
+		return nil, fmt.Errorf("error preparing query GetLatestNumericKeyframeBlock: %w", err)
+	}
+	if q.getLatestStringKeyframeBlockStmt, err = db.PrepareContext(ctx, getLatestStringKeyframeBlock); err != nil {
+		return nil, fmt.Errorf("error preparing query GetLatestStringKeyframeBlock: %w", err)
+	}
+	if q.getMatchingNumericValuesEqualStmt, err = db.PrepareContext(ctx, getMatchingNumericValuesEqual); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMatchingNumericValuesEqual: %w", err)
+	}
+	if q.getMatchingNumericValuesGreaterOrEqualThanStmt, err = db.PrepareContext(ctx, getMatchingNumericValuesGreaterOrEqualThan); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMatchingNumericValuesGreaterOrEqualThan: %w", err)
+	}
+	if q.getMatchingNumericValuesGreaterThanStmt, err = db.PrepareContext(ctx, getMatchingNumericValuesGreaterThan); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMatchingNumericValuesGreaterThan: %w", err)
+	}
+	if q.getMatchingNumericValuesInclusionStmt, err = db.PrepareContext(ctx, getMatchingNumericValuesInclusion); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMatchingNumericValuesInclusion: %w", err)
+	}
+	if q.getMatchingNumericValuesLessOrEqualThanStmt, err = db.PrepareContext(ctx, getMatchingNumericValuesLessOrEqualThan); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMatchingNumericValuesLessOrEqualThan: %w", err)
+	}
+	if q.getMatchingNumericValuesLessThanStmt, err = db.PrepareContext(ctx, getMatchingNumericValuesLessThan); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMatchingNumericValuesLessThan: %w", err)
+	}
+	if q.getMatchingNumericValuesNotEqualStmt, err = db.PrepareContext(ctx, getMatchingNumericValuesNotEqual); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMatchingNumericValuesNotEqual: %w", err)
+	}
+	if q.getMatchingNumericValuesNotInclusionStmt, err = db.PrepareContext(ctx, getMatchingNumericValuesNotInclusion); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMatchingNumericValuesNotInclusion: %w", err)
+	}
+	if q.getMatchingStringValuesEqualStmt, err = db.PrepareContext(ctx, getMatchingStringValuesEqual); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMatchingStringValuesEqual: %w", err)
+	}
+	if q.getMatchingStringValuesGlobStmt, err = db.PrepareContext(ctx, getMatchingStringValuesGlob); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMatchingStringValuesGlob: %w", err)
+	}
+	if q.getMatchingStringValuesGreaterOrEqualThanStmt, err = db.PrepareContext(ctx, getMatchingStringValuesGreaterOrEqualThan); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMatchingStringValuesGreaterOrEqualThan: %w", err)
+	}
+	if q.getMatchingStringValuesGreaterThanStmt, err = db.PrepareContext(ctx, getMatchingStringValuesGreaterThan); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMatchingStringValuesGreaterThan: %w", err)
+	}
+	if q.getMatchingStringValuesInclusionStmt, err = db.PrepareContext(ctx, getMatchingStringValuesInclusion); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMatchingStringValuesInclusion: %w", err)
+	}
+	if q.getMatchingStringValuesLessOrEqualThanStmt, err = db.PrepareContext(ctx, getMatchingStringValuesLessOrEqualThan); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMatchingStringValuesLessOrEqualThan: %w", err)
+	}
+	if q.getMatchingStringValuesLessThanStmt, err = db.PrepareContext(ctx, getMatchingStringValuesLessThan); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMatchingStringValuesLessThan: %w", err)
+	}
+	if q.getMatchingStringValuesNotEqualStmt, err = db.PrepareContext(ctx, getMatchingStringValuesNotEqual); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMatchingStringValuesNotEqual: %w", err)
+	}
+	if q.getMatchingStringValuesNotGlobStmt, err = db.PrepareContext(ctx, getMatchingStringValuesNotGlob); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMatchingStringValuesNotGlob: %w", err)
+	}
+	if q.getMatchingStringValuesNotInclusionStmt, err = db.PrepareContext(ctx, getMatchingStringValuesNotInclusion); err != nil {
+		return nil, fmt.Errorf("error preparing query GetMatchingStringValuesNotInclusion: %w", err)
+	}
 	if q.getNumberOfEntitiesStmt, err = db.PrepareContext(ctx, getNumberOfEntities); err != nil {
 		return nil, fmt.Errorf("error preparing query GetNumberOfEntities: %w", err)
 	}
-	if q.getNumericAttributeValueBitmapStmt, err = db.PrepareContext(ctx, getNumericAttributeValueBitmap); err != nil {
-		return nil, fmt.Errorf("error preparing query GetNumericAttributeValueBitmap: %w", err)
+	if q.getNumericBitmapEntriesInRangeStmt, err = db.PrepareContext(ctx, getNumericBitmapEntriesInRange); err != nil {
+		return nil, fmt.Errorf("error preparing query GetNumericBitmapEntriesInRange: %w", err)
 	}
-	if q.getPayloadForEntityKeyStmt, err = db.PrepareContext(ctx, getPayloadForEntityKey); err != nil {
-		return nil, fmt.Errorf("error preparing query GetPayloadForEntityKey: %w", err)
+	if q.getNumericKeyframeBlockAtOrBeforeStmt, err = db.PrepareContext(ctx, getNumericKeyframeBlockAtOrBefore); err != nil {
+		return nil, fmt.Errorf("error preparing query GetNumericKeyframeBlockAtOrBefore: %w", err)
 	}
-	if q.getStringAttributeValueBitmapStmt, err = db.PrepareContext(ctx, getStringAttributeValueBitmap); err != nil {
-		return nil, fmt.Errorf("error preparing query GetStringAttributeValueBitmap: %w", err)
+	if q.getStringBitmapEntriesInRangeStmt, err = db.PrepareContext(ctx, getStringBitmapEntriesInRange); err != nil {
+		return nil, fmt.Errorf("error preparing query GetStringBitmapEntriesInRange: %w", err)
+	}
+	if q.getStringKeyframeBlockAtOrBeforeStmt, err = db.PrepareContext(ctx, getStringKeyframeBlockAtOrBefore); err != nil {
+		return nil, fmt.Errorf("error preparing query GetStringKeyframeBlockAtOrBefore: %w", err)
+	}
+	if q.insertNumericBitmapEntryStmt, err = db.PrepareContext(ctx, insertNumericBitmapEntry); err != nil {
+		return nil, fmt.Errorf("error preparing query InsertNumericBitmapEntry: %w", err)
+	}
+	if q.insertPayloadStmt, err = db.PrepareContext(ctx, insertPayload); err != nil {
+		return nil, fmt.Errorf("error preparing query InsertPayload: %w", err)
+	}
+	if q.insertStringBitmapEntryStmt, err = db.PrepareContext(ctx, insertStringBitmapEntry); err != nil {
+		return nil, fmt.Errorf("error preparing query InsertStringBitmapEntry: %w", err)
+	}
+	if q.pruneNumericBitmapsBeforeStmt, err = db.PrepareContext(ctx, pruneNumericBitmapsBefore); err != nil {
+		return nil, fmt.Errorf("error preparing query PruneNumericBitmapsBefore: %w", err)
+	}
+	if q.prunePayloadsBeforeStmt, err = db.PrepareContext(ctx, prunePayloadsBefore); err != nil {
+		return nil, fmt.Errorf("error preparing query PrunePayloadsBefore: %w", err)
+	}
+	if q.pruneStringBitmapsBeforeStmt, err = db.PrepareContext(ctx, pruneStringBitmapsBefore); err != nil {
+		return nil, fmt.Errorf("error preparing query PruneStringBitmapsBefore: %w", err)
+	}
+	if q.reorgDeleteNewPayloadsStmt, err = db.PrepareContext(ctx, reorgDeleteNewPayloads); err != nil {
+		return nil, fmt.Errorf("error preparing query ReorgDeleteNewPayloads: %w", err)
+	}
+	if q.reorgDeleteNumericBitmapsStmt, err = db.PrepareContext(ctx, reorgDeleteNumericBitmaps); err != nil {
+		return nil, fmt.Errorf("error preparing query ReorgDeleteNumericBitmaps: %w", err)
+	}
+	if q.reorgDeleteStringBitmapsStmt, err = db.PrepareContext(ctx, reorgDeleteStringBitmaps); err != nil {
+		return nil, fmt.Errorf("error preparing query ReorgDeleteStringBitmaps: %w", err)
+	}
+	if q.reorgReopenPayloadsStmt, err = db.PrepareContext(ctx, reorgReopenPayloads); err != nil {
+		return nil, fmt.Errorf("error preparing query ReorgReopenPayloads: %w", err)
 	}
 	if q.retrievePayloadsStmt, err = db.PrepareContext(ctx, retrievePayloads); err != nil {
 		return nil, fmt.Errorf("error preparing query RetrievePayloads: %w", err)
@@ -111,128 +162,49 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.upsertLastBlockStmt, err = db.PrepareContext(ctx, upsertLastBlock); err != nil {
 		return nil, fmt.Errorf("error preparing query UpsertLastBlock: %w", err)
 	}
-	if q.upsertNumericAttributeValueBitmapStmt, err = db.PrepareContext(ctx, upsertNumericAttributeValueBitmap); err != nil {
-		return nil, fmt.Errorf("error preparing query UpsertNumericAttributeValueBitmap: %w", err)
-	}
-	if q.upsertPayloadStmt, err = db.PrepareContext(ctx, upsertPayload); err != nil {
-		return nil, fmt.Errorf("error preparing query UpsertPayload: %w", err)
-	}
-	if q.upsertStringAttributeValueBitmapStmt, err = db.PrepareContext(ctx, upsertStringAttributeValueBitmap); err != nil {
-		return nil, fmt.Errorf("error preparing query UpsertStringAttributeValueBitmap: %w", err)
-	}
 	return &q, nil
 }
 
 func (q *Queries) Close() error {
 	var err error
-	if q.deleteNumericAttributeValueBitmapStmt != nil {
-		if cerr := q.deleteNumericAttributeValueBitmapStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing deleteNumericAttributeValueBitmapStmt: %w", cerr)
+	if q.closePayloadVersionStmt != nil {
+		if cerr := q.closePayloadVersionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing closePayloadVersionStmt: %w", cerr)
 		}
 	}
-	if q.deletePayloadForEntityKeyStmt != nil {
-		if cerr := q.deletePayloadForEntityKeyStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing deletePayloadForEntityKeyStmt: %w", cerr)
+	if q.countDeltasSinceLastKeyframeNumericStmt != nil {
+		if cerr := q.countDeltasSinceLastKeyframeNumericStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countDeltasSinceLastKeyframeNumericStmt: %w", cerr)
 		}
 	}
-	if q.deleteStringAttributeValueBitmapStmt != nil {
-		if cerr := q.deleteStringAttributeValueBitmapStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing deleteStringAttributeValueBitmapStmt: %w", cerr)
+	if q.countDeltasSinceLastKeyframeStringStmt != nil {
+		if cerr := q.countDeltasSinceLastKeyframeStringStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing countDeltasSinceLastKeyframeStringStmt: %w", cerr)
 		}
 	}
-	if q.evaluateAllStmt != nil {
-		if cerr := q.evaluateAllStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing evaluateAllStmt: %w", cerr)
+	if q.evaluateAllAtBlockStmt != nil {
+		if cerr := q.evaluateAllAtBlockStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evaluateAllAtBlockStmt: %w", cerr)
 		}
 	}
-	if q.evaluateNumericAttributeValueEqualStmt != nil {
-		if cerr := q.evaluateNumericAttributeValueEqualStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing evaluateNumericAttributeValueEqualStmt: %w", cerr)
+	if q.evaluateAllCurrentStmt != nil {
+		if cerr := q.evaluateAllCurrentStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing evaluateAllCurrentStmt: %w", cerr)
 		}
 	}
-	if q.evaluateNumericAttributeValueGreaterOrEqualThanStmt != nil {
-		if cerr := q.evaluateNumericAttributeValueGreaterOrEqualThanStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing evaluateNumericAttributeValueGreaterOrEqualThanStmt: %w", cerr)
+	if q.getAllNumericBitmapEntriesFromStmt != nil {
+		if cerr := q.getAllNumericBitmapEntriesFromStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAllNumericBitmapEntriesFromStmt: %w", cerr)
 		}
 	}
-	if q.evaluateNumericAttributeValueGreaterThanStmt != nil {
-		if cerr := q.evaluateNumericAttributeValueGreaterThanStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing evaluateNumericAttributeValueGreaterThanStmt: %w", cerr)
+	if q.getAllStringBitmapEntriesFromStmt != nil {
+		if cerr := q.getAllStringBitmapEntriesFromStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAllStringBitmapEntriesFromStmt: %w", cerr)
 		}
 	}
-	if q.evaluateNumericAttributeValueInclusionStmt != nil {
-		if cerr := q.evaluateNumericAttributeValueInclusionStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing evaluateNumericAttributeValueInclusionStmt: %w", cerr)
-		}
-	}
-	if q.evaluateNumericAttributeValueLessOrEqualThanStmt != nil {
-		if cerr := q.evaluateNumericAttributeValueLessOrEqualThanStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing evaluateNumericAttributeValueLessOrEqualThanStmt: %w", cerr)
-		}
-	}
-	if q.evaluateNumericAttributeValueLowerThanStmt != nil {
-		if cerr := q.evaluateNumericAttributeValueLowerThanStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing evaluateNumericAttributeValueLowerThanStmt: %w", cerr)
-		}
-	}
-	if q.evaluateNumericAttributeValueNotEqualStmt != nil {
-		if cerr := q.evaluateNumericAttributeValueNotEqualStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing evaluateNumericAttributeValueNotEqualStmt: %w", cerr)
-		}
-	}
-	if q.evaluateNumericAttributeValueNotInclusionStmt != nil {
-		if cerr := q.evaluateNumericAttributeValueNotInclusionStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing evaluateNumericAttributeValueNotInclusionStmt: %w", cerr)
-		}
-	}
-	if q.evaluateStringAttributeValueEqualStmt != nil {
-		if cerr := q.evaluateStringAttributeValueEqualStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing evaluateStringAttributeValueEqualStmt: %w", cerr)
-		}
-	}
-	if q.evaluateStringAttributeValueGlobStmt != nil {
-		if cerr := q.evaluateStringAttributeValueGlobStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing evaluateStringAttributeValueGlobStmt: %w", cerr)
-		}
-	}
-	if q.evaluateStringAttributeValueGreaterOrEqualThanStmt != nil {
-		if cerr := q.evaluateStringAttributeValueGreaterOrEqualThanStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing evaluateStringAttributeValueGreaterOrEqualThanStmt: %w", cerr)
-		}
-	}
-	if q.evaluateStringAttributeValueGreaterThanStmt != nil {
-		if cerr := q.evaluateStringAttributeValueGreaterThanStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing evaluateStringAttributeValueGreaterThanStmt: %w", cerr)
-		}
-	}
-	if q.evaluateStringAttributeValueInclusionStmt != nil {
-		if cerr := q.evaluateStringAttributeValueInclusionStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing evaluateStringAttributeValueInclusionStmt: %w", cerr)
-		}
-	}
-	if q.evaluateStringAttributeValueLessOrEqualThanStmt != nil {
-		if cerr := q.evaluateStringAttributeValueLessOrEqualThanStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing evaluateStringAttributeValueLessOrEqualThanStmt: %w", cerr)
-		}
-	}
-	if q.evaluateStringAttributeValueLowerThanStmt != nil {
-		if cerr := q.evaluateStringAttributeValueLowerThanStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing evaluateStringAttributeValueLowerThanStmt: %w", cerr)
-		}
-	}
-	if q.evaluateStringAttributeValueNotEqualStmt != nil {
-		if cerr := q.evaluateStringAttributeValueNotEqualStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing evaluateStringAttributeValueNotEqualStmt: %w", cerr)
-		}
-	}
-	if q.evaluateStringAttributeValueNotGlobStmt != nil {
-		if cerr := q.evaluateStringAttributeValueNotGlobStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing evaluateStringAttributeValueNotGlobStmt: %w", cerr)
-		}
-	}
-	if q.evaluateStringAttributeValueNotInclusionStmt != nil {
-		if cerr := q.evaluateStringAttributeValueNotInclusionStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing evaluateStringAttributeValueNotInclusionStmt: %w", cerr)
+	if q.getCurrentPayloadForEntityKeyStmt != nil {
+		if cerr := q.getCurrentPayloadForEntityKeyStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getCurrentPayloadForEntityKeyStmt: %w", cerr)
 		}
 	}
 	if q.getLastBlockStmt != nil {
@@ -240,24 +212,179 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getLastBlockStmt: %w", cerr)
 		}
 	}
+	if q.getLatestNumericKeyframeBlockStmt != nil {
+		if cerr := q.getLatestNumericKeyframeBlockStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getLatestNumericKeyframeBlockStmt: %w", cerr)
+		}
+	}
+	if q.getLatestStringKeyframeBlockStmt != nil {
+		if cerr := q.getLatestStringKeyframeBlockStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getLatestStringKeyframeBlockStmt: %w", cerr)
+		}
+	}
+	if q.getMatchingNumericValuesEqualStmt != nil {
+		if cerr := q.getMatchingNumericValuesEqualStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMatchingNumericValuesEqualStmt: %w", cerr)
+		}
+	}
+	if q.getMatchingNumericValuesGreaterOrEqualThanStmt != nil {
+		if cerr := q.getMatchingNumericValuesGreaterOrEqualThanStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMatchingNumericValuesGreaterOrEqualThanStmt: %w", cerr)
+		}
+	}
+	if q.getMatchingNumericValuesGreaterThanStmt != nil {
+		if cerr := q.getMatchingNumericValuesGreaterThanStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMatchingNumericValuesGreaterThanStmt: %w", cerr)
+		}
+	}
+	if q.getMatchingNumericValuesInclusionStmt != nil {
+		if cerr := q.getMatchingNumericValuesInclusionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMatchingNumericValuesInclusionStmt: %w", cerr)
+		}
+	}
+	if q.getMatchingNumericValuesLessOrEqualThanStmt != nil {
+		if cerr := q.getMatchingNumericValuesLessOrEqualThanStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMatchingNumericValuesLessOrEqualThanStmt: %w", cerr)
+		}
+	}
+	if q.getMatchingNumericValuesLessThanStmt != nil {
+		if cerr := q.getMatchingNumericValuesLessThanStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMatchingNumericValuesLessThanStmt: %w", cerr)
+		}
+	}
+	if q.getMatchingNumericValuesNotEqualStmt != nil {
+		if cerr := q.getMatchingNumericValuesNotEqualStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMatchingNumericValuesNotEqualStmt: %w", cerr)
+		}
+	}
+	if q.getMatchingNumericValuesNotInclusionStmt != nil {
+		if cerr := q.getMatchingNumericValuesNotInclusionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMatchingNumericValuesNotInclusionStmt: %w", cerr)
+		}
+	}
+	if q.getMatchingStringValuesEqualStmt != nil {
+		if cerr := q.getMatchingStringValuesEqualStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMatchingStringValuesEqualStmt: %w", cerr)
+		}
+	}
+	if q.getMatchingStringValuesGlobStmt != nil {
+		if cerr := q.getMatchingStringValuesGlobStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMatchingStringValuesGlobStmt: %w", cerr)
+		}
+	}
+	if q.getMatchingStringValuesGreaterOrEqualThanStmt != nil {
+		if cerr := q.getMatchingStringValuesGreaterOrEqualThanStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMatchingStringValuesGreaterOrEqualThanStmt: %w", cerr)
+		}
+	}
+	if q.getMatchingStringValuesGreaterThanStmt != nil {
+		if cerr := q.getMatchingStringValuesGreaterThanStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMatchingStringValuesGreaterThanStmt: %w", cerr)
+		}
+	}
+	if q.getMatchingStringValuesInclusionStmt != nil {
+		if cerr := q.getMatchingStringValuesInclusionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMatchingStringValuesInclusionStmt: %w", cerr)
+		}
+	}
+	if q.getMatchingStringValuesLessOrEqualThanStmt != nil {
+		if cerr := q.getMatchingStringValuesLessOrEqualThanStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMatchingStringValuesLessOrEqualThanStmt: %w", cerr)
+		}
+	}
+	if q.getMatchingStringValuesLessThanStmt != nil {
+		if cerr := q.getMatchingStringValuesLessThanStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMatchingStringValuesLessThanStmt: %w", cerr)
+		}
+	}
+	if q.getMatchingStringValuesNotEqualStmt != nil {
+		if cerr := q.getMatchingStringValuesNotEqualStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMatchingStringValuesNotEqualStmt: %w", cerr)
+		}
+	}
+	if q.getMatchingStringValuesNotGlobStmt != nil {
+		if cerr := q.getMatchingStringValuesNotGlobStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMatchingStringValuesNotGlobStmt: %w", cerr)
+		}
+	}
+	if q.getMatchingStringValuesNotInclusionStmt != nil {
+		if cerr := q.getMatchingStringValuesNotInclusionStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getMatchingStringValuesNotInclusionStmt: %w", cerr)
+		}
+	}
 	if q.getNumberOfEntitiesStmt != nil {
 		if cerr := q.getNumberOfEntitiesStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getNumberOfEntitiesStmt: %w", cerr)
 		}
 	}
-	if q.getNumericAttributeValueBitmapStmt != nil {
-		if cerr := q.getNumericAttributeValueBitmapStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getNumericAttributeValueBitmapStmt: %w", cerr)
+	if q.getNumericBitmapEntriesInRangeStmt != nil {
+		if cerr := q.getNumericBitmapEntriesInRangeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getNumericBitmapEntriesInRangeStmt: %w", cerr)
 		}
 	}
-	if q.getPayloadForEntityKeyStmt != nil {
-		if cerr := q.getPayloadForEntityKeyStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getPayloadForEntityKeyStmt: %w", cerr)
+	if q.getNumericKeyframeBlockAtOrBeforeStmt != nil {
+		if cerr := q.getNumericKeyframeBlockAtOrBeforeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getNumericKeyframeBlockAtOrBeforeStmt: %w", cerr)
 		}
 	}
-	if q.getStringAttributeValueBitmapStmt != nil {
-		if cerr := q.getStringAttributeValueBitmapStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getStringAttributeValueBitmapStmt: %w", cerr)
+	if q.getStringBitmapEntriesInRangeStmt != nil {
+		if cerr := q.getStringBitmapEntriesInRangeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getStringBitmapEntriesInRangeStmt: %w", cerr)
+		}
+	}
+	if q.getStringKeyframeBlockAtOrBeforeStmt != nil {
+		if cerr := q.getStringKeyframeBlockAtOrBeforeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getStringKeyframeBlockAtOrBeforeStmt: %w", cerr)
+		}
+	}
+	if q.insertNumericBitmapEntryStmt != nil {
+		if cerr := q.insertNumericBitmapEntryStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing insertNumericBitmapEntryStmt: %w", cerr)
+		}
+	}
+	if q.insertPayloadStmt != nil {
+		if cerr := q.insertPayloadStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing insertPayloadStmt: %w", cerr)
+		}
+	}
+	if q.insertStringBitmapEntryStmt != nil {
+		if cerr := q.insertStringBitmapEntryStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing insertStringBitmapEntryStmt: %w", cerr)
+		}
+	}
+	if q.pruneNumericBitmapsBeforeStmt != nil {
+		if cerr := q.pruneNumericBitmapsBeforeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing pruneNumericBitmapsBeforeStmt: %w", cerr)
+		}
+	}
+	if q.prunePayloadsBeforeStmt != nil {
+		if cerr := q.prunePayloadsBeforeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing prunePayloadsBeforeStmt: %w", cerr)
+		}
+	}
+	if q.pruneStringBitmapsBeforeStmt != nil {
+		if cerr := q.pruneStringBitmapsBeforeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing pruneStringBitmapsBeforeStmt: %w", cerr)
+		}
+	}
+	if q.reorgDeleteNewPayloadsStmt != nil {
+		if cerr := q.reorgDeleteNewPayloadsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing reorgDeleteNewPayloadsStmt: %w", cerr)
+		}
+	}
+	if q.reorgDeleteNumericBitmapsStmt != nil {
+		if cerr := q.reorgDeleteNumericBitmapsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing reorgDeleteNumericBitmapsStmt: %w", cerr)
+		}
+	}
+	if q.reorgDeleteStringBitmapsStmt != nil {
+		if cerr := q.reorgDeleteStringBitmapsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing reorgDeleteStringBitmapsStmt: %w", cerr)
+		}
+	}
+	if q.reorgReopenPayloadsStmt != nil {
+		if cerr := q.reorgReopenPayloadsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing reorgReopenPayloadsStmt: %w", cerr)
 		}
 	}
 	if q.retrievePayloadsStmt != nil {
@@ -268,21 +395,6 @@ func (q *Queries) Close() error {
 	if q.upsertLastBlockStmt != nil {
 		if cerr := q.upsertLastBlockStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing upsertLastBlockStmt: %w", cerr)
-		}
-	}
-	if q.upsertNumericAttributeValueBitmapStmt != nil {
-		if cerr := q.upsertNumericAttributeValueBitmapStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing upsertNumericAttributeValueBitmapStmt: %w", cerr)
-		}
-	}
-	if q.upsertPayloadStmt != nil {
-		if cerr := q.upsertPayloadStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing upsertPayloadStmt: %w", cerr)
-		}
-	}
-	if q.upsertStringAttributeValueBitmapStmt != nil {
-		if cerr := q.upsertStringAttributeValueBitmapStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing upsertStringAttributeValueBitmapStmt: %w", cerr)
 		}
 	}
 	return err
@@ -322,77 +434,105 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 }
 
 type Queries struct {
-	db                                                  DBTX
-	tx                                                  *sql.Tx
-	deleteNumericAttributeValueBitmapStmt               *sql.Stmt
-	deletePayloadForEntityKeyStmt                       *sql.Stmt
-	deleteStringAttributeValueBitmapStmt                *sql.Stmt
-	evaluateAllStmt                                     *sql.Stmt
-	evaluateNumericAttributeValueEqualStmt              *sql.Stmt
-	evaluateNumericAttributeValueGreaterOrEqualThanStmt *sql.Stmt
-	evaluateNumericAttributeValueGreaterThanStmt        *sql.Stmt
-	evaluateNumericAttributeValueInclusionStmt          *sql.Stmt
-	evaluateNumericAttributeValueLessOrEqualThanStmt    *sql.Stmt
-	evaluateNumericAttributeValueLowerThanStmt          *sql.Stmt
-	evaluateNumericAttributeValueNotEqualStmt           *sql.Stmt
-	evaluateNumericAttributeValueNotInclusionStmt       *sql.Stmt
-	evaluateStringAttributeValueEqualStmt               *sql.Stmt
-	evaluateStringAttributeValueGlobStmt                *sql.Stmt
-	evaluateStringAttributeValueGreaterOrEqualThanStmt  *sql.Stmt
-	evaluateStringAttributeValueGreaterThanStmt         *sql.Stmt
-	evaluateStringAttributeValueInclusionStmt           *sql.Stmt
-	evaluateStringAttributeValueLessOrEqualThanStmt     *sql.Stmt
-	evaluateStringAttributeValueLowerThanStmt           *sql.Stmt
-	evaluateStringAttributeValueNotEqualStmt            *sql.Stmt
-	evaluateStringAttributeValueNotGlobStmt             *sql.Stmt
-	evaluateStringAttributeValueNotInclusionStmt        *sql.Stmt
-	getLastBlockStmt                                    *sql.Stmt
-	getNumberOfEntitiesStmt                             *sql.Stmt
-	getNumericAttributeValueBitmapStmt                  *sql.Stmt
-	getPayloadForEntityKeyStmt                          *sql.Stmt
-	getStringAttributeValueBitmapStmt                   *sql.Stmt
-	retrievePayloadsStmt                                *sql.Stmt
-	upsertLastBlockStmt                                 *sql.Stmt
-	upsertNumericAttributeValueBitmapStmt               *sql.Stmt
-	upsertPayloadStmt                                   *sql.Stmt
-	upsertStringAttributeValueBitmapStmt                *sql.Stmt
+	db                                             DBTX
+	tx                                             *sql.Tx
+	closePayloadVersionStmt                        *sql.Stmt
+	countDeltasSinceLastKeyframeNumericStmt        *sql.Stmt
+	countDeltasSinceLastKeyframeStringStmt         *sql.Stmt
+	evaluateAllAtBlockStmt                         *sql.Stmt
+	evaluateAllCurrentStmt                         *sql.Stmt
+	getAllNumericBitmapEntriesFromStmt             *sql.Stmt
+	getAllStringBitmapEntriesFromStmt              *sql.Stmt
+	getCurrentPayloadForEntityKeyStmt              *sql.Stmt
+	getLastBlockStmt                               *sql.Stmt
+	getLatestNumericKeyframeBlockStmt              *sql.Stmt
+	getLatestStringKeyframeBlockStmt               *sql.Stmt
+	getMatchingNumericValuesEqualStmt              *sql.Stmt
+	getMatchingNumericValuesGreaterOrEqualThanStmt *sql.Stmt
+	getMatchingNumericValuesGreaterThanStmt        *sql.Stmt
+	getMatchingNumericValuesInclusionStmt          *sql.Stmt
+	getMatchingNumericValuesLessOrEqualThanStmt    *sql.Stmt
+	getMatchingNumericValuesLessThanStmt           *sql.Stmt
+	getMatchingNumericValuesNotEqualStmt           *sql.Stmt
+	getMatchingNumericValuesNotInclusionStmt       *sql.Stmt
+	getMatchingStringValuesEqualStmt               *sql.Stmt
+	getMatchingStringValuesGlobStmt                *sql.Stmt
+	getMatchingStringValuesGreaterOrEqualThanStmt  *sql.Stmt
+	getMatchingStringValuesGreaterThanStmt         *sql.Stmt
+	getMatchingStringValuesInclusionStmt           *sql.Stmt
+	getMatchingStringValuesLessOrEqualThanStmt     *sql.Stmt
+	getMatchingStringValuesLessThanStmt            *sql.Stmt
+	getMatchingStringValuesNotEqualStmt            *sql.Stmt
+	getMatchingStringValuesNotGlobStmt             *sql.Stmt
+	getMatchingStringValuesNotInclusionStmt        *sql.Stmt
+	getNumberOfEntitiesStmt                        *sql.Stmt
+	getNumericBitmapEntriesInRangeStmt             *sql.Stmt
+	getNumericKeyframeBlockAtOrBeforeStmt          *sql.Stmt
+	getStringBitmapEntriesInRangeStmt              *sql.Stmt
+	getStringKeyframeBlockAtOrBeforeStmt           *sql.Stmt
+	insertNumericBitmapEntryStmt                   *sql.Stmt
+	insertPayloadStmt                              *sql.Stmt
+	insertStringBitmapEntryStmt                    *sql.Stmt
+	pruneNumericBitmapsBeforeStmt                  *sql.Stmt
+	prunePayloadsBeforeStmt                        *sql.Stmt
+	pruneStringBitmapsBeforeStmt                   *sql.Stmt
+	reorgDeleteNewPayloadsStmt                     *sql.Stmt
+	reorgDeleteNumericBitmapsStmt                  *sql.Stmt
+	reorgDeleteStringBitmapsStmt                   *sql.Stmt
+	reorgReopenPayloadsStmt                        *sql.Stmt
+	retrievePayloadsStmt                           *sql.Stmt
+	upsertLastBlockStmt                            *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
-		db:                                     tx,
-		tx:                                     tx,
-		deleteNumericAttributeValueBitmapStmt:  q.deleteNumericAttributeValueBitmapStmt,
-		deletePayloadForEntityKeyStmt:          q.deletePayloadForEntityKeyStmt,
-		deleteStringAttributeValueBitmapStmt:   q.deleteStringAttributeValueBitmapStmt,
-		evaluateAllStmt:                        q.evaluateAllStmt,
-		evaluateNumericAttributeValueEqualStmt: q.evaluateNumericAttributeValueEqualStmt,
-		evaluateNumericAttributeValueGreaterOrEqualThanStmt: q.evaluateNumericAttributeValueGreaterOrEqualThanStmt,
-		evaluateNumericAttributeValueGreaterThanStmt:        q.evaluateNumericAttributeValueGreaterThanStmt,
-		evaluateNumericAttributeValueInclusionStmt:          q.evaluateNumericAttributeValueInclusionStmt,
-		evaluateNumericAttributeValueLessOrEqualThanStmt:    q.evaluateNumericAttributeValueLessOrEqualThanStmt,
-		evaluateNumericAttributeValueLowerThanStmt:          q.evaluateNumericAttributeValueLowerThanStmt,
-		evaluateNumericAttributeValueNotEqualStmt:           q.evaluateNumericAttributeValueNotEqualStmt,
-		evaluateNumericAttributeValueNotInclusionStmt:       q.evaluateNumericAttributeValueNotInclusionStmt,
-		evaluateStringAttributeValueEqualStmt:               q.evaluateStringAttributeValueEqualStmt,
-		evaluateStringAttributeValueGlobStmt:                q.evaluateStringAttributeValueGlobStmt,
-		evaluateStringAttributeValueGreaterOrEqualThanStmt:  q.evaluateStringAttributeValueGreaterOrEqualThanStmt,
-		evaluateStringAttributeValueGreaterThanStmt:         q.evaluateStringAttributeValueGreaterThanStmt,
-		evaluateStringAttributeValueInclusionStmt:           q.evaluateStringAttributeValueInclusionStmt,
-		evaluateStringAttributeValueLessOrEqualThanStmt:     q.evaluateStringAttributeValueLessOrEqualThanStmt,
-		evaluateStringAttributeValueLowerThanStmt:           q.evaluateStringAttributeValueLowerThanStmt,
-		evaluateStringAttributeValueNotEqualStmt:            q.evaluateStringAttributeValueNotEqualStmt,
-		evaluateStringAttributeValueNotGlobStmt:             q.evaluateStringAttributeValueNotGlobStmt,
-		evaluateStringAttributeValueNotInclusionStmt:        q.evaluateStringAttributeValueNotInclusionStmt,
-		getLastBlockStmt:                      q.getLastBlockStmt,
-		getNumberOfEntitiesStmt:               q.getNumberOfEntitiesStmt,
-		getNumericAttributeValueBitmapStmt:    q.getNumericAttributeValueBitmapStmt,
-		getPayloadForEntityKeyStmt:            q.getPayloadForEntityKeyStmt,
-		getStringAttributeValueBitmapStmt:     q.getStringAttributeValueBitmapStmt,
-		retrievePayloadsStmt:                  q.retrievePayloadsStmt,
-		upsertLastBlockStmt:                   q.upsertLastBlockStmt,
-		upsertNumericAttributeValueBitmapStmt: q.upsertNumericAttributeValueBitmapStmt,
-		upsertPayloadStmt:                     q.upsertPayloadStmt,
-		upsertStringAttributeValueBitmapStmt:  q.upsertStringAttributeValueBitmapStmt,
+		db:                                             tx,
+		tx:                                             tx,
+		closePayloadVersionStmt:                        q.closePayloadVersionStmt,
+		countDeltasSinceLastKeyframeNumericStmt:        q.countDeltasSinceLastKeyframeNumericStmt,
+		countDeltasSinceLastKeyframeStringStmt:         q.countDeltasSinceLastKeyframeStringStmt,
+		evaluateAllAtBlockStmt:                         q.evaluateAllAtBlockStmt,
+		evaluateAllCurrentStmt:                         q.evaluateAllCurrentStmt,
+		getAllNumericBitmapEntriesFromStmt:             q.getAllNumericBitmapEntriesFromStmt,
+		getAllStringBitmapEntriesFromStmt:              q.getAllStringBitmapEntriesFromStmt,
+		getCurrentPayloadForEntityKeyStmt:              q.getCurrentPayloadForEntityKeyStmt,
+		getLastBlockStmt:                               q.getLastBlockStmt,
+		getLatestNumericKeyframeBlockStmt:              q.getLatestNumericKeyframeBlockStmt,
+		getLatestStringKeyframeBlockStmt:               q.getLatestStringKeyframeBlockStmt,
+		getMatchingNumericValuesEqualStmt:              q.getMatchingNumericValuesEqualStmt,
+		getMatchingNumericValuesGreaterOrEqualThanStmt: q.getMatchingNumericValuesGreaterOrEqualThanStmt,
+		getMatchingNumericValuesGreaterThanStmt:        q.getMatchingNumericValuesGreaterThanStmt,
+		getMatchingNumericValuesInclusionStmt:          q.getMatchingNumericValuesInclusionStmt,
+		getMatchingNumericValuesLessOrEqualThanStmt:    q.getMatchingNumericValuesLessOrEqualThanStmt,
+		getMatchingNumericValuesLessThanStmt:           q.getMatchingNumericValuesLessThanStmt,
+		getMatchingNumericValuesNotEqualStmt:           q.getMatchingNumericValuesNotEqualStmt,
+		getMatchingNumericValuesNotInclusionStmt:       q.getMatchingNumericValuesNotInclusionStmt,
+		getMatchingStringValuesEqualStmt:               q.getMatchingStringValuesEqualStmt,
+		getMatchingStringValuesGlobStmt:                q.getMatchingStringValuesGlobStmt,
+		getMatchingStringValuesGreaterOrEqualThanStmt:  q.getMatchingStringValuesGreaterOrEqualThanStmt,
+		getMatchingStringValuesGreaterThanStmt:         q.getMatchingStringValuesGreaterThanStmt,
+		getMatchingStringValuesInclusionStmt:           q.getMatchingStringValuesInclusionStmt,
+		getMatchingStringValuesLessOrEqualThanStmt:     q.getMatchingStringValuesLessOrEqualThanStmt,
+		getMatchingStringValuesLessThanStmt:            q.getMatchingStringValuesLessThanStmt,
+		getMatchingStringValuesNotEqualStmt:            q.getMatchingStringValuesNotEqualStmt,
+		getMatchingStringValuesNotGlobStmt:             q.getMatchingStringValuesNotGlobStmt,
+		getMatchingStringValuesNotInclusionStmt:        q.getMatchingStringValuesNotInclusionStmt,
+		getNumberOfEntitiesStmt:                        q.getNumberOfEntitiesStmt,
+		getNumericBitmapEntriesInRangeStmt:             q.getNumericBitmapEntriesInRangeStmt,
+		getNumericKeyframeBlockAtOrBeforeStmt:          q.getNumericKeyframeBlockAtOrBeforeStmt,
+		getStringBitmapEntriesInRangeStmt:              q.getStringBitmapEntriesInRangeStmt,
+		getStringKeyframeBlockAtOrBeforeStmt:           q.getStringKeyframeBlockAtOrBeforeStmt,
+		insertNumericBitmapEntryStmt:                   q.insertNumericBitmapEntryStmt,
+		insertPayloadStmt:                              q.insertPayloadStmt,
+		insertStringBitmapEntryStmt:                    q.insertStringBitmapEntryStmt,
+		pruneNumericBitmapsBeforeStmt:                  q.pruneNumericBitmapsBeforeStmt,
+		prunePayloadsBeforeStmt:                        q.prunePayloadsBeforeStmt,
+		pruneStringBitmapsBeforeStmt:                   q.pruneStringBitmapsBeforeStmt,
+		reorgDeleteNewPayloadsStmt:                     q.reorgDeleteNewPayloadsStmt,
+		reorgDeleteNumericBitmapsStmt:                  q.reorgDeleteNumericBitmapsStmt,
+		reorgDeleteStringBitmapsStmt:                   q.reorgDeleteStringBitmapsStmt,
+		reorgReopenPayloadsStmt:                        q.reorgReopenPayloadsStmt,
+		retrievePayloadsStmt:                           q.retrievePayloadsStmt,
+		upsertLastBlockStmt:                            q.upsertLastBlockStmt,
 	}
 }

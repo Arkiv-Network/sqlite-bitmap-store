@@ -31,7 +31,21 @@ sql:
               type: "Bitmap"
               pointer: true
           - column: "numeric_attributes_values_bitmaps.bitmap"
-            go_type: 
+            go_type:
               import: ""
               type: "Bitmap"
               pointer: true
+          - column: "payloads.from_block"
+            go_type: "uint64"
+          - column: "payloads.to_block"
+            go_type:
+              type: "uint64"
+              pointer: true
+          - column: "string_attributes_values_bitmaps.block"
+            go_type: "uint64"
+          - column: "string_attributes_values_bitmaps.is_full_bitmap"
+            go_type: "bool"
+          - column: "numeric_attributes_values_bitmaps.block"
+            go_type: "uint64"
+          - column: "numeric_attributes_values_bitmaps.is_full_bitmap"
+            go_type: "bool"

@@ -9,44 +9,178 @@ import (
 	"context"
 )
 
-const deleteNumericAttributeValueBitmap = `-- name: DeleteNumericAttributeValueBitmap :exec
-DELETE FROM numeric_attributes_values_bitmaps
-WHERE name = ? AND value = ?
+const closePayloadVersion = `-- name: ClosePayloadVersion :exec
+UPDATE payloads SET to_block = ?1
+WHERE entity_key = ?2 AND to_block IS NULL
 `
 
-type DeleteNumericAttributeValueBitmapParams struct {
+type ClosePayloadVersionParams struct {
+	Block     *uint64
+	EntityKey []byte
+}
+
+func (q *Queries) ClosePayloadVersion(ctx context.Context, arg ClosePayloadVersionParams) error {
+	_, err := q.exec(ctx, q.closePayloadVersionStmt, closePayloadVersion, arg.Block, arg.EntityKey)
+	return err
+}
+
+const countDeltasSinceLastKeyframeNumeric = `-- name: CountDeltasSinceLastKeyframeNumeric :one
+SELECT COUNT(*) FROM numeric_attributes_values_bitmaps AS outer_n
+WHERE outer_n.name = ?1 AND outer_n.value = ?2 AND outer_n.is_full_bitmap = 0
+  AND outer_n.block > (
+    SELECT COALESCE(MAX(inner_n.block), -1)
+    FROM numeric_attributes_values_bitmaps AS inner_n
+    WHERE inner_n.name = ?1 AND inner_n.value = ?2 AND inner_n.is_full_bitmap = 1
+  )
+`
+
+type CountDeltasSinceLastKeyframeNumericParams struct {
 	Name  string
 	Value uint64
 }
 
-func (q *Queries) DeleteNumericAttributeValueBitmap(ctx context.Context, arg DeleteNumericAttributeValueBitmapParams) error {
-	_, err := q.exec(ctx, q.deleteNumericAttributeValueBitmapStmt, deleteNumericAttributeValueBitmap, arg.Name, arg.Value)
-	return err
+func (q *Queries) CountDeltasSinceLastKeyframeNumeric(ctx context.Context, arg CountDeltasSinceLastKeyframeNumericParams) (int64, error) {
+	row := q.queryRow(ctx, q.countDeltasSinceLastKeyframeNumericStmt, countDeltasSinceLastKeyframeNumeric, arg.Name, arg.Value)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
-const deletePayloadForEntityKey = `-- name: DeletePayloadForEntityKey :exec
-DELETE FROM payloads
-WHERE entity_key = ?
+const countDeltasSinceLastKeyframeString = `-- name: CountDeltasSinceLastKeyframeString :one
+SELECT COUNT(*) FROM string_attributes_values_bitmaps AS outer_s
+WHERE outer_s.name = ?1 AND outer_s.value = ?2 AND outer_s.is_full_bitmap = 0
+  AND outer_s.block > (
+    SELECT COALESCE(MAX(inner_s.block), -1)
+    FROM string_attributes_values_bitmaps AS inner_s
+    WHERE inner_s.name = ?1 AND inner_s.value = ?2 AND inner_s.is_full_bitmap = 1
+  )
 `
 
-func (q *Queries) DeletePayloadForEntityKey(ctx context.Context, entityKey []byte) error {
-	_, err := q.exec(ctx, q.deletePayloadForEntityKeyStmt, deletePayloadForEntityKey, entityKey)
-	return err
-}
-
-const deleteStringAttributeValueBitmap = `-- name: DeleteStringAttributeValueBitmap :exec
-DELETE FROM string_attributes_values_bitmaps
-WHERE name = ? AND value = ?
-`
-
-type DeleteStringAttributeValueBitmapParams struct {
+type CountDeltasSinceLastKeyframeStringParams struct {
 	Name  string
 	Value string
 }
 
-func (q *Queries) DeleteStringAttributeValueBitmap(ctx context.Context, arg DeleteStringAttributeValueBitmapParams) error {
-	_, err := q.exec(ctx, q.deleteStringAttributeValueBitmapStmt, deleteStringAttributeValueBitmap, arg.Name, arg.Value)
-	return err
+func (q *Queries) CountDeltasSinceLastKeyframeString(ctx context.Context, arg CountDeltasSinceLastKeyframeStringParams) (int64, error) {
+	row := q.queryRow(ctx, q.countDeltasSinceLastKeyframeStringStmt, countDeltasSinceLastKeyframeString, arg.Name, arg.Value)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getAllNumericBitmapEntriesFrom = `-- name: GetAllNumericBitmapEntriesFrom :many
+SELECT block, is_full_bitmap, bitmap FROM numeric_attributes_values_bitmaps
+WHERE name = ?1 AND value = ?2
+  AND block >= ?3
+ORDER BY block ASC
+`
+
+type GetAllNumericBitmapEntriesFromParams struct {
+	Name      string
+	Value     uint64
+	FromBlock uint64
+}
+
+type GetAllNumericBitmapEntriesFromRow struct {
+	Block        uint64
+	IsFullBitmap bool
+	Bitmap       *Bitmap
+}
+
+func (q *Queries) GetAllNumericBitmapEntriesFrom(ctx context.Context, arg GetAllNumericBitmapEntriesFromParams) ([]GetAllNumericBitmapEntriesFromRow, error) {
+	rows, err := q.query(ctx, q.getAllNumericBitmapEntriesFromStmt, getAllNumericBitmapEntriesFrom, arg.Name, arg.Value, arg.FromBlock)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAllNumericBitmapEntriesFromRow{}
+	for rows.Next() {
+		var i GetAllNumericBitmapEntriesFromRow
+		if err := rows.Scan(&i.Block, &i.IsFullBitmap, &i.Bitmap); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAllStringBitmapEntriesFrom = `-- name: GetAllStringBitmapEntriesFrom :many
+SELECT block, is_full_bitmap, bitmap FROM string_attributes_values_bitmaps
+WHERE name = ?1 AND value = ?2
+  AND block >= ?3
+ORDER BY block ASC
+`
+
+type GetAllStringBitmapEntriesFromParams struct {
+	Name      string
+	Value     string
+	FromBlock uint64
+}
+
+type GetAllStringBitmapEntriesFromRow struct {
+	Block        uint64
+	IsFullBitmap bool
+	Bitmap       *Bitmap
+}
+
+func (q *Queries) GetAllStringBitmapEntriesFrom(ctx context.Context, arg GetAllStringBitmapEntriesFromParams) ([]GetAllStringBitmapEntriesFromRow, error) {
+	rows, err := q.query(ctx, q.getAllStringBitmapEntriesFromStmt, getAllStringBitmapEntriesFrom, arg.Name, arg.Value, arg.FromBlock)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAllStringBitmapEntriesFromRow{}
+	for rows.Next() {
+		var i GetAllStringBitmapEntriesFromRow
+		if err := rows.Scan(&i.Block, &i.IsFullBitmap, &i.Bitmap); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCurrentPayloadForEntityKey = `-- name: GetCurrentPayloadForEntityKey :one
+SELECT entity_key, id, payload, content_type, string_attributes, numeric_attributes, from_block
+FROM payloads
+WHERE entity_key = ?1 AND to_block IS NULL
+`
+
+type GetCurrentPayloadForEntityKeyRow struct {
+	EntityKey         []byte
+	ID                uint64
+	Payload           []byte
+	ContentType       string
+	StringAttributes  *StringAttributes
+	NumericAttributes *NumericAttributes
+	FromBlock         uint64
+}
+
+func (q *Queries) GetCurrentPayloadForEntityKey(ctx context.Context, entityKey []byte) (GetCurrentPayloadForEntityKeyRow, error) {
+	row := q.queryRow(ctx, q.getCurrentPayloadForEntityKeyStmt, getCurrentPayloadForEntityKey, entityKey)
+	var i GetCurrentPayloadForEntityKeyRow
+	err := row.Scan(
+		&i.EntityKey,
+		&i.ID,
+		&i.Payload,
+		&i.ContentType,
+		&i.StringAttributes,
+		&i.NumericAttributes,
+		&i.FromBlock,
+	)
+	return i, err
 }
 
 const getLastBlock = `-- name: GetLastBlock :one
@@ -60,67 +194,335 @@ func (q *Queries) GetLastBlock(ctx context.Context) (uint64, error) {
 	return block, err
 }
 
-const getNumericAttributeValueBitmap = `-- name: GetNumericAttributeValueBitmap :one
-SELECT bitmap FROM numeric_attributes_values_bitmaps
-WHERE name = ? AND value = ?
+const getLatestNumericKeyframeBlock = `-- name: GetLatestNumericKeyframeBlock :one
+SELECT COALESCE(MAX(block), -1) FROM numeric_attributes_values_bitmaps
+WHERE name = ?1 AND value = ?2 AND is_full_bitmap = 1
 `
 
-type GetNumericAttributeValueBitmapParams struct {
+type GetLatestNumericKeyframeBlockParams struct {
 	Name  string
 	Value uint64
 }
 
-func (q *Queries) GetNumericAttributeValueBitmap(ctx context.Context, arg GetNumericAttributeValueBitmapParams) (*Bitmap, error) {
-	row := q.queryRow(ctx, q.getNumericAttributeValueBitmapStmt, getNumericAttributeValueBitmap, arg.Name, arg.Value)
-	var bitmap *Bitmap
-	err := row.Scan(&bitmap)
-	return bitmap, err
+func (q *Queries) GetLatestNumericKeyframeBlock(ctx context.Context, arg GetLatestNumericKeyframeBlockParams) (interface{}, error) {
+	row := q.queryRow(ctx, q.getLatestNumericKeyframeBlockStmt, getLatestNumericKeyframeBlock, arg.Name, arg.Value)
+	var coalesce interface{}
+	err := row.Scan(&coalesce)
+	return coalesce, err
 }
 
-const getPayloadForEntityKey = `-- name: GetPayloadForEntityKey :one
-SELECT entity_key, id, payload, content_type, string_attributes, numeric_attributes
-FROM payloads
-WHERE entity_key = ?
+const getLatestStringKeyframeBlock = `-- name: GetLatestStringKeyframeBlock :one
+SELECT COALESCE(MAX(block), -1) FROM string_attributes_values_bitmaps
+WHERE name = ?1 AND value = ?2 AND is_full_bitmap = 1
 `
 
-type GetPayloadForEntityKeyRow struct {
-	EntityKey         []byte
-	ID                uint64
-	Payload           []byte
-	ContentType       string
-	StringAttributes  *StringAttributes
-	NumericAttributes *NumericAttributes
-}
-
-func (q *Queries) GetPayloadForEntityKey(ctx context.Context, entityKey []byte) (GetPayloadForEntityKeyRow, error) {
-	row := q.queryRow(ctx, q.getPayloadForEntityKeyStmt, getPayloadForEntityKey, entityKey)
-	var i GetPayloadForEntityKeyRow
-	err := row.Scan(
-		&i.EntityKey,
-		&i.ID,
-		&i.Payload,
-		&i.ContentType,
-		&i.StringAttributes,
-		&i.NumericAttributes,
-	)
-	return i, err
-}
-
-const getStringAttributeValueBitmap = `-- name: GetStringAttributeValueBitmap :one
-SELECT bitmap FROM string_attributes_values_bitmaps
-WHERE name = ? AND value = ?
-`
-
-type GetStringAttributeValueBitmapParams struct {
+type GetLatestStringKeyframeBlockParams struct {
 	Name  string
 	Value string
 }
 
-func (q *Queries) GetStringAttributeValueBitmap(ctx context.Context, arg GetStringAttributeValueBitmapParams) (*Bitmap, error) {
-	row := q.queryRow(ctx, q.getStringAttributeValueBitmapStmt, getStringAttributeValueBitmap, arg.Name, arg.Value)
-	var bitmap *Bitmap
-	err := row.Scan(&bitmap)
-	return bitmap, err
+func (q *Queries) GetLatestStringKeyframeBlock(ctx context.Context, arg GetLatestStringKeyframeBlockParams) (interface{}, error) {
+	row := q.queryRow(ctx, q.getLatestStringKeyframeBlockStmt, getLatestStringKeyframeBlock, arg.Name, arg.Value)
+	var coalesce interface{}
+	err := row.Scan(&coalesce)
+	return coalesce, err
+}
+
+const getNumericBitmapEntriesInRange = `-- name: GetNumericBitmapEntriesInRange :many
+SELECT block, is_full_bitmap, bitmap FROM numeric_attributes_values_bitmaps
+WHERE name = ?1 AND value = ?2
+  AND block >= ?3 AND block <= ?4
+ORDER BY block ASC
+`
+
+type GetNumericBitmapEntriesInRangeParams struct {
+	Name      string
+	Value     uint64
+	FromBlock uint64
+	ToBlock   uint64
+}
+
+type GetNumericBitmapEntriesInRangeRow struct {
+	Block        uint64
+	IsFullBitmap bool
+	Bitmap       *Bitmap
+}
+
+func (q *Queries) GetNumericBitmapEntriesInRange(ctx context.Context, arg GetNumericBitmapEntriesInRangeParams) ([]GetNumericBitmapEntriesInRangeRow, error) {
+	rows, err := q.query(ctx, q.getNumericBitmapEntriesInRangeStmt, getNumericBitmapEntriesInRange,
+		arg.Name,
+		arg.Value,
+		arg.FromBlock,
+		arg.ToBlock,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetNumericBitmapEntriesInRangeRow{}
+	for rows.Next() {
+		var i GetNumericBitmapEntriesInRangeRow
+		if err := rows.Scan(&i.Block, &i.IsFullBitmap, &i.Bitmap); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getNumericKeyframeBlockAtOrBefore = `-- name: GetNumericKeyframeBlockAtOrBefore :one
+SELECT COALESCE(MAX(block), -1) FROM numeric_attributes_values_bitmaps
+WHERE name = ?1 AND value = ?2 AND is_full_bitmap = 1
+  AND block <= ?3
+`
+
+type GetNumericKeyframeBlockAtOrBeforeParams struct {
+	Name        string
+	Value       uint64
+	TargetBlock uint64
+}
+
+func (q *Queries) GetNumericKeyframeBlockAtOrBefore(ctx context.Context, arg GetNumericKeyframeBlockAtOrBeforeParams) (interface{}, error) {
+	row := q.queryRow(ctx, q.getNumericKeyframeBlockAtOrBeforeStmt, getNumericKeyframeBlockAtOrBefore, arg.Name, arg.Value, arg.TargetBlock)
+	var coalesce interface{}
+	err := row.Scan(&coalesce)
+	return coalesce, err
+}
+
+const getStringBitmapEntriesInRange = `-- name: GetStringBitmapEntriesInRange :many
+SELECT block, is_full_bitmap, bitmap FROM string_attributes_values_bitmaps
+WHERE name = ?1 AND value = ?2
+  AND block >= ?3 AND block <= ?4
+ORDER BY block ASC
+`
+
+type GetStringBitmapEntriesInRangeParams struct {
+	Name      string
+	Value     string
+	FromBlock uint64
+	ToBlock   uint64
+}
+
+type GetStringBitmapEntriesInRangeRow struct {
+	Block        uint64
+	IsFullBitmap bool
+	Bitmap       *Bitmap
+}
+
+func (q *Queries) GetStringBitmapEntriesInRange(ctx context.Context, arg GetStringBitmapEntriesInRangeParams) ([]GetStringBitmapEntriesInRangeRow, error) {
+	rows, err := q.query(ctx, q.getStringBitmapEntriesInRangeStmt, getStringBitmapEntriesInRange,
+		arg.Name,
+		arg.Value,
+		arg.FromBlock,
+		arg.ToBlock,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetStringBitmapEntriesInRangeRow{}
+	for rows.Next() {
+		var i GetStringBitmapEntriesInRangeRow
+		if err := rows.Scan(&i.Block, &i.IsFullBitmap, &i.Bitmap); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getStringKeyframeBlockAtOrBefore = `-- name: GetStringKeyframeBlockAtOrBefore :one
+SELECT COALESCE(MAX(block), -1) FROM string_attributes_values_bitmaps
+WHERE name = ?1 AND value = ?2 AND is_full_bitmap = 1
+  AND block <= ?3
+`
+
+type GetStringKeyframeBlockAtOrBeforeParams struct {
+	Name        string
+	Value       string
+	TargetBlock uint64
+}
+
+func (q *Queries) GetStringKeyframeBlockAtOrBefore(ctx context.Context, arg GetStringKeyframeBlockAtOrBeforeParams) (interface{}, error) {
+	row := q.queryRow(ctx, q.getStringKeyframeBlockAtOrBeforeStmt, getStringKeyframeBlockAtOrBefore, arg.Name, arg.Value, arg.TargetBlock)
+	var coalesce interface{}
+	err := row.Scan(&coalesce)
+	return coalesce, err
+}
+
+const insertNumericBitmapEntry = `-- name: InsertNumericBitmapEntry :exec
+INSERT INTO numeric_attributes_values_bitmaps (name, value, block, is_full_bitmap, bitmap)
+VALUES (?, ?, ?, ?, ?)
+`
+
+type InsertNumericBitmapEntryParams struct {
+	Name         string
+	Value        uint64
+	Block        uint64
+	IsFullBitmap bool
+	Bitmap       *Bitmap
+}
+
+func (q *Queries) InsertNumericBitmapEntry(ctx context.Context, arg InsertNumericBitmapEntryParams) error {
+	_, err := q.exec(ctx, q.insertNumericBitmapEntryStmt, insertNumericBitmapEntry,
+		arg.Name,
+		arg.Value,
+		arg.Block,
+		arg.IsFullBitmap,
+		arg.Bitmap,
+	)
+	return err
+}
+
+const insertPayload = `-- name: InsertPayload :one
+INSERT INTO payloads (entity_key, payload, content_type, string_attributes, numeric_attributes, from_block, to_block)
+VALUES (?, ?, ?, ?, ?, ?, NULL)
+RETURNING id
+`
+
+type InsertPayloadParams struct {
+	EntityKey         []byte
+	Payload           []byte
+	ContentType       string
+	StringAttributes  *StringAttributes
+	NumericAttributes *NumericAttributes
+	FromBlock         uint64
+}
+
+func (q *Queries) InsertPayload(ctx context.Context, arg InsertPayloadParams) (uint64, error) {
+	row := q.queryRow(ctx, q.insertPayloadStmt, insertPayload,
+		arg.EntityKey,
+		arg.Payload,
+		arg.ContentType,
+		arg.StringAttributes,
+		arg.NumericAttributes,
+		arg.FromBlock,
+	)
+	var id uint64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertStringBitmapEntry = `-- name: InsertStringBitmapEntry :exec
+INSERT INTO string_attributes_values_bitmaps (name, value, block, is_full_bitmap, bitmap)
+VALUES (?, ?, ?, ?, ?)
+`
+
+type InsertStringBitmapEntryParams struct {
+	Name         string
+	Value        string
+	Block        uint64
+	IsFullBitmap bool
+	Bitmap       *Bitmap
+}
+
+func (q *Queries) InsertStringBitmapEntry(ctx context.Context, arg InsertStringBitmapEntryParams) error {
+	_, err := q.exec(ctx, q.insertStringBitmapEntryStmt, insertStringBitmapEntry,
+		arg.Name,
+		arg.Value,
+		arg.Block,
+		arg.IsFullBitmap,
+		arg.Bitmap,
+	)
+	return err
+}
+
+const pruneNumericBitmapsBefore = `-- name: PruneNumericBitmapsBefore :exec
+DELETE FROM numeric_attributes_values_bitmaps
+WHERE rowid IN (
+  SELECT b.rowid FROM numeric_attributes_values_bitmaps AS b
+  WHERE b.block < (
+    SELECT COALESCE(MAX(k.block), 0)
+    FROM numeric_attributes_values_bitmaps AS k
+    WHERE k.name = b.name AND k.value = b.value
+      AND k.is_full_bitmap = 1 AND k.block <= ?1
+  )
+)
+`
+
+func (q *Queries) PruneNumericBitmapsBefore(ctx context.Context, pruneBlock uint64) error {
+	_, err := q.exec(ctx, q.pruneNumericBitmapsBeforeStmt, pruneNumericBitmapsBefore, pruneBlock)
+	return err
+}
+
+const prunePayloadsBefore = `-- name: PrunePayloadsBefore :exec
+
+DELETE FROM payloads WHERE to_block IS NOT NULL AND to_block <= ?1
+`
+
+// Pruning queries
+func (q *Queries) PrunePayloadsBefore(ctx context.Context, block *uint64) error {
+	_, err := q.exec(ctx, q.prunePayloadsBeforeStmt, prunePayloadsBefore, block)
+	return err
+}
+
+const pruneStringBitmapsBefore = `-- name: PruneStringBitmapsBefore :exec
+DELETE FROM string_attributes_values_bitmaps
+WHERE rowid IN (
+  SELECT b.rowid FROM string_attributes_values_bitmaps AS b
+  WHERE b.block < (
+    SELECT COALESCE(MAX(k.block), 0)
+    FROM string_attributes_values_bitmaps AS k
+    WHERE k.name = b.name AND k.value = b.value
+      AND k.is_full_bitmap = 1 AND k.block <= ?1
+  )
+)
+`
+
+func (q *Queries) PruneStringBitmapsBefore(ctx context.Context, pruneBlock uint64) error {
+	_, err := q.exec(ctx, q.pruneStringBitmapsBeforeStmt, pruneStringBitmapsBefore, pruneBlock)
+	return err
+}
+
+const reorgDeleteNewPayloads = `-- name: ReorgDeleteNewPayloads :exec
+DELETE FROM payloads WHERE from_block > ?1
+`
+
+func (q *Queries) ReorgDeleteNewPayloads(ctx context.Context, block uint64) error {
+	_, err := q.exec(ctx, q.reorgDeleteNewPayloadsStmt, reorgDeleteNewPayloads, block)
+	return err
+}
+
+const reorgDeleteNumericBitmaps = `-- name: ReorgDeleteNumericBitmaps :exec
+DELETE FROM numeric_attributes_values_bitmaps WHERE block > ?1
+`
+
+func (q *Queries) ReorgDeleteNumericBitmaps(ctx context.Context, block uint64) error {
+	_, err := q.exec(ctx, q.reorgDeleteNumericBitmapsStmt, reorgDeleteNumericBitmaps, block)
+	return err
+}
+
+const reorgDeleteStringBitmaps = `-- name: ReorgDeleteStringBitmaps :exec
+DELETE FROM string_attributes_values_bitmaps WHERE block > ?1
+`
+
+func (q *Queries) ReorgDeleteStringBitmaps(ctx context.Context, block uint64) error {
+	_, err := q.exec(ctx, q.reorgDeleteStringBitmapsStmt, reorgDeleteStringBitmaps, block)
+	return err
+}
+
+const reorgReopenPayloads = `-- name: ReorgReopenPayloads :exec
+
+UPDATE payloads SET to_block = NULL
+WHERE from_block <= ?1 AND to_block IS NOT NULL AND to_block > ?1
+`
+
+// Reorg queries
+func (q *Queries) ReorgReopenPayloads(ctx context.Context, block uint64) error {
+	_, err := q.exec(ctx, q.reorgReopenPayloadsStmt, reorgReopenPayloads, block)
+	return err
 }
 
 const upsertLastBlock = `-- name: UpsertLastBlock :exec
@@ -131,76 +533,5 @@ ON CONFLICT (id) DO UPDATE SET block = EXCLUDED.block
 
 func (q *Queries) UpsertLastBlock(ctx context.Context, block uint64) error {
 	_, err := q.exec(ctx, q.upsertLastBlockStmt, upsertLastBlock, block)
-	return err
-}
-
-const upsertNumericAttributeValueBitmap = `-- name: UpsertNumericAttributeValueBitmap :exec
-INSERT INTO numeric_attributes_values_bitmaps (name, value, bitmap)
-VALUES (?, ?, ?)
-ON CONFLICT (name, value) DO UPDATE SET bitmap = excluded.bitmap
-`
-
-type UpsertNumericAttributeValueBitmapParams struct {
-	Name   string
-	Value  uint64
-	Bitmap *Bitmap
-}
-
-func (q *Queries) UpsertNumericAttributeValueBitmap(ctx context.Context, arg UpsertNumericAttributeValueBitmapParams) error {
-	_, err := q.exec(ctx, q.upsertNumericAttributeValueBitmapStmt, upsertNumericAttributeValueBitmap, arg.Name, arg.Value, arg.Bitmap)
-	return err
-}
-
-const upsertPayload = `-- name: UpsertPayload :one
-INSERT INTO payloads (
-    entity_key,
-    payload,
-    content_type,
-    string_attributes,
-    numeric_attributes
-) VALUES (?, ?, ?, ?, ?)
-ON CONFLICT (entity_key) DO UPDATE SET
-    payload = excluded.payload,
-    content_type = excluded.content_type,
-    string_attributes = excluded.string_attributes,
-    numeric_attributes = excluded.numeric_attributes
-RETURNING id
-`
-
-type UpsertPayloadParams struct {
-	EntityKey         []byte
-	Payload           []byte
-	ContentType       string
-	StringAttributes  *StringAttributes
-	NumericAttributes *NumericAttributes
-}
-
-func (q *Queries) UpsertPayload(ctx context.Context, arg UpsertPayloadParams) (uint64, error) {
-	row := q.queryRow(ctx, q.upsertPayloadStmt, upsertPayload,
-		arg.EntityKey,
-		arg.Payload,
-		arg.ContentType,
-		arg.StringAttributes,
-		arg.NumericAttributes,
-	)
-	var id uint64
-	err := row.Scan(&id)
-	return id, err
-}
-
-const upsertStringAttributeValueBitmap = `-- name: UpsertStringAttributeValueBitmap :exec
-INSERT INTO string_attributes_values_bitmaps (name, value, bitmap)
-VALUES (?, ?, ?)
-ON CONFLICT (name, value) DO UPDATE SET bitmap = excluded.bitmap
-`
-
-type UpsertStringAttributeValueBitmapParams struct {
-	Name   string
-	Value  string
-	Bitmap *Bitmap
-}
-
-func (q *Queries) UpsertStringAttributeValueBitmap(ctx context.Context, arg UpsertStringAttributeValueBitmapParams) error {
-	_, err := q.exec(ctx, q.upsertStringAttributeValueBitmapStmt, upsertStringAttributeValueBitmap, arg.Name, arg.Value, arg.Bitmap)
 	return err
 }

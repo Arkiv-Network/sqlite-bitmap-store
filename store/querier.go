@@ -9,38 +9,59 @@ import (
 )
 
 type Querier interface {
-	DeleteNumericAttributeValueBitmap(ctx context.Context, arg DeleteNumericAttributeValueBitmapParams) error
-	DeletePayloadForEntityKey(ctx context.Context, entityKey []byte) error
-	DeleteStringAttributeValueBitmap(ctx context.Context, arg DeleteStringAttributeValueBitmapParams) error
-	EvaluateAll(ctx context.Context) ([]uint64, error)
-	EvaluateNumericAttributeValueEqual(ctx context.Context, arg EvaluateNumericAttributeValueEqualParams) (*Bitmap, error)
-	EvaluateNumericAttributeValueGreaterOrEqualThan(ctx context.Context, arg EvaluateNumericAttributeValueGreaterOrEqualThanParams) ([]*Bitmap, error)
-	EvaluateNumericAttributeValueGreaterThan(ctx context.Context, arg EvaluateNumericAttributeValueGreaterThanParams) ([]*Bitmap, error)
-	EvaluateNumericAttributeValueInclusion(ctx context.Context, arg EvaluateNumericAttributeValueInclusionParams) ([]*Bitmap, error)
-	EvaluateNumericAttributeValueLessOrEqualThan(ctx context.Context, arg EvaluateNumericAttributeValueLessOrEqualThanParams) ([]*Bitmap, error)
-	EvaluateNumericAttributeValueLowerThan(ctx context.Context, arg EvaluateNumericAttributeValueLowerThanParams) ([]*Bitmap, error)
-	EvaluateNumericAttributeValueNotEqual(ctx context.Context, arg EvaluateNumericAttributeValueNotEqualParams) ([]*Bitmap, error)
-	EvaluateNumericAttributeValueNotInclusion(ctx context.Context, arg EvaluateNumericAttributeValueNotInclusionParams) ([]*Bitmap, error)
-	EvaluateStringAttributeValueEqual(ctx context.Context, arg EvaluateStringAttributeValueEqualParams) (*Bitmap, error)
-	EvaluateStringAttributeValueGlob(ctx context.Context, arg EvaluateStringAttributeValueGlobParams) ([]*Bitmap, error)
-	EvaluateStringAttributeValueGreaterOrEqualThan(ctx context.Context, arg EvaluateStringAttributeValueGreaterOrEqualThanParams) ([]*Bitmap, error)
-	EvaluateStringAttributeValueGreaterThan(ctx context.Context, arg EvaluateStringAttributeValueGreaterThanParams) ([]*Bitmap, error)
-	EvaluateStringAttributeValueInclusion(ctx context.Context, arg EvaluateStringAttributeValueInclusionParams) ([]*Bitmap, error)
-	EvaluateStringAttributeValueLessOrEqualThan(ctx context.Context, arg EvaluateStringAttributeValueLessOrEqualThanParams) ([]*Bitmap, error)
-	EvaluateStringAttributeValueLowerThan(ctx context.Context, arg EvaluateStringAttributeValueLowerThanParams) ([]*Bitmap, error)
-	EvaluateStringAttributeValueNotEqual(ctx context.Context, arg EvaluateStringAttributeValueNotEqualParams) ([]*Bitmap, error)
-	EvaluateStringAttributeValueNotGlob(ctx context.Context, arg EvaluateStringAttributeValueNotGlobParams) ([]*Bitmap, error)
-	EvaluateStringAttributeValueNotInclusion(ctx context.Context, arg EvaluateStringAttributeValueNotInclusionParams) ([]*Bitmap, error)
+	ClosePayloadVersion(ctx context.Context, arg ClosePayloadVersionParams) error
+	CountDeltasSinceLastKeyframeNumeric(ctx context.Context, arg CountDeltasSinceLastKeyframeNumericParams) (int64, error)
+	CountDeltasSinceLastKeyframeString(ctx context.Context, arg CountDeltasSinceLastKeyframeStringParams) (int64, error)
+	EvaluateAllAtBlock(ctx context.Context, block uint64) ([]uint64, error)
+	EvaluateAllCurrent(ctx context.Context) ([]uint64, error)
+	GetAllNumericBitmapEntriesFrom(ctx context.Context, arg GetAllNumericBitmapEntriesFromParams) ([]GetAllNumericBitmapEntriesFromRow, error)
+	GetAllStringBitmapEntriesFrom(ctx context.Context, arg GetAllStringBitmapEntriesFromParams) ([]GetAllStringBitmapEntriesFromRow, error)
+	GetCurrentPayloadForEntityKey(ctx context.Context, entityKey []byte) (GetCurrentPayloadForEntityKeyRow, error)
 	GetLastBlock(ctx context.Context) (uint64, error)
+	GetLatestNumericKeyframeBlock(ctx context.Context, arg GetLatestNumericKeyframeBlockParams) (interface{}, error)
+	GetLatestStringKeyframeBlock(ctx context.Context, arg GetLatestStringKeyframeBlockParams) (interface{}, error)
+	// Numeric attribute value queries
+	GetMatchingNumericValuesEqual(ctx context.Context, arg GetMatchingNumericValuesEqualParams) ([]uint64, error)
+	GetMatchingNumericValuesGreaterOrEqualThan(ctx context.Context, arg GetMatchingNumericValuesGreaterOrEqualThanParams) ([]uint64, error)
+	GetMatchingNumericValuesGreaterThan(ctx context.Context, arg GetMatchingNumericValuesGreaterThanParams) ([]uint64, error)
+	GetMatchingNumericValuesInclusion(ctx context.Context, arg GetMatchingNumericValuesInclusionParams) ([]uint64, error)
+	GetMatchingNumericValuesLessOrEqualThan(ctx context.Context, arg GetMatchingNumericValuesLessOrEqualThanParams) ([]uint64, error)
+	GetMatchingNumericValuesLessThan(ctx context.Context, arg GetMatchingNumericValuesLessThanParams) ([]uint64, error)
+	GetMatchingNumericValuesNotEqual(ctx context.Context, arg GetMatchingNumericValuesNotEqualParams) ([]uint64, error)
+	GetMatchingNumericValuesNotInclusion(ctx context.Context, arg GetMatchingNumericValuesNotInclusionParams) ([]uint64, error)
+	// Value-listing queries for query evaluation.
+	// Each returns distinct values matching a condition, filtered by block.
+	// The Go layer then reconstructs bitmaps for each matching value via XOR chains.
+	// String attribute value queries
+	GetMatchingStringValuesEqual(ctx context.Context, arg GetMatchingStringValuesEqualParams) ([]string, error)
+	GetMatchingStringValuesGlob(ctx context.Context, arg GetMatchingStringValuesGlobParams) ([]string, error)
+	GetMatchingStringValuesGreaterOrEqualThan(ctx context.Context, arg GetMatchingStringValuesGreaterOrEqualThanParams) ([]string, error)
+	GetMatchingStringValuesGreaterThan(ctx context.Context, arg GetMatchingStringValuesGreaterThanParams) ([]string, error)
+	GetMatchingStringValuesInclusion(ctx context.Context, arg GetMatchingStringValuesInclusionParams) ([]string, error)
+	GetMatchingStringValuesLessOrEqualThan(ctx context.Context, arg GetMatchingStringValuesLessOrEqualThanParams) ([]string, error)
+	GetMatchingStringValuesLessThan(ctx context.Context, arg GetMatchingStringValuesLessThanParams) ([]string, error)
+	GetMatchingStringValuesNotEqual(ctx context.Context, arg GetMatchingStringValuesNotEqualParams) ([]string, error)
+	GetMatchingStringValuesNotGlob(ctx context.Context, arg GetMatchingStringValuesNotGlobParams) ([]string, error)
+	GetMatchingStringValuesNotInclusion(ctx context.Context, arg GetMatchingStringValuesNotInclusionParams) ([]string, error)
 	GetNumberOfEntities(ctx context.Context) (int64, error)
-	GetNumericAttributeValueBitmap(ctx context.Context, arg GetNumericAttributeValueBitmapParams) (*Bitmap, error)
-	GetPayloadForEntityKey(ctx context.Context, entityKey []byte) (GetPayloadForEntityKeyRow, error)
-	GetStringAttributeValueBitmap(ctx context.Context, arg GetStringAttributeValueBitmapParams) (*Bitmap, error)
+	GetNumericBitmapEntriesInRange(ctx context.Context, arg GetNumericBitmapEntriesInRangeParams) ([]GetNumericBitmapEntriesInRangeRow, error)
+	GetNumericKeyframeBlockAtOrBefore(ctx context.Context, arg GetNumericKeyframeBlockAtOrBeforeParams) (interface{}, error)
+	GetStringBitmapEntriesInRange(ctx context.Context, arg GetStringBitmapEntriesInRangeParams) ([]GetStringBitmapEntriesInRangeRow, error)
+	GetStringKeyframeBlockAtOrBefore(ctx context.Context, arg GetStringKeyframeBlockAtOrBeforeParams) (interface{}, error)
+	InsertNumericBitmapEntry(ctx context.Context, arg InsertNumericBitmapEntryParams) error
+	InsertPayload(ctx context.Context, arg InsertPayloadParams) (uint64, error)
+	InsertStringBitmapEntry(ctx context.Context, arg InsertStringBitmapEntryParams) error
+	PruneNumericBitmapsBefore(ctx context.Context, pruneBlock uint64) error
+	// Pruning queries
+	PrunePayloadsBefore(ctx context.Context, block *uint64) error
+	PruneStringBitmapsBefore(ctx context.Context, pruneBlock uint64) error
+	ReorgDeleteNewPayloads(ctx context.Context, block uint64) error
+	ReorgDeleteNumericBitmaps(ctx context.Context, block uint64) error
+	ReorgDeleteStringBitmaps(ctx context.Context, block uint64) error
+	// Reorg queries
+	ReorgReopenPayloads(ctx context.Context, block uint64) error
 	RetrievePayloads(ctx context.Context, ids []uint64) ([]RetrievePayloadsRow, error)
 	UpsertLastBlock(ctx context.Context, block uint64) error
-	UpsertNumericAttributeValueBitmap(ctx context.Context, arg UpsertNumericAttributeValueBitmapParams) error
-	UpsertPayload(ctx context.Context, arg UpsertPayloadParams) (uint64, error)
-	UpsertStringAttributeValueBitmap(ctx context.Context, arg UpsertStringAttributeValueBitmapParams) error
 }
 
 var _ Querier = (*Queries)(nil)

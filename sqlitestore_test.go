@@ -126,10 +126,7 @@ var _ = Describe("SQLiteStore", func() {
 
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
 				// Query by string attribute: type = "document"
-				docBitmap, err := q.EvaluateStringAttributeValueEqual(ctx, store.EvaluateStringAttributeValueEqualParams{
-					Name:  "type",
-					Value: "document",
-				})
+				docBitmap, err := q.ReconstructLatestStringBitmap(ctx, "type", "document")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(docBitmap).NotTo(BeNil())
 
@@ -144,10 +141,7 @@ var _ = Describe("SQLiteStore", func() {
 				Expect(docPayloads[0].StringAttributes.Values["type"]).To(Equal("document"))
 
 				// Query by string attribute: type = "image"
-				imageBitmap, err := q.EvaluateStringAttributeValueEqual(ctx, store.EvaluateStringAttributeValueEqualParams{
-					Name:  "type",
-					Value: "image",
-				})
+				imageBitmap, err := q.ReconstructLatestStringBitmap(ctx, "type", "image")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(imageBitmap).NotTo(BeNil())
 
@@ -161,10 +155,7 @@ var _ = Describe("SQLiteStore", func() {
 				Expect(imagePayloads[0].ContentType).To(Equal("image/png"))
 
 				// Query by numeric attribute: version = 1
-				version1Bitmap, err := q.EvaluateNumericAttributeValueEqual(ctx, store.EvaluateNumericAttributeValueEqualParams{
-					Name:  "version",
-					Value: 1,
-				})
+				version1Bitmap, err := q.ReconstructLatestNumericBitmap(ctx, "version", 1)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(version1Bitmap).NotTo(BeNil())
 
@@ -176,40 +167,32 @@ var _ = Describe("SQLiteStore", func() {
 				Expect(version1Payloads).To(HaveLen(1))
 				Expect(version1Payloads[0].NumericAttributes.Values["version"]).To(Equal(uint64(1)))
 
-				// Query by numeric attribute: version > 1
-				versionGT1Bitmaps, err := q.EvaluateNumericAttributeValueGreaterThan(ctx, store.EvaluateNumericAttributeValueGreaterThanParams{
-					Name:  "version",
-					Value: 1,
-				})
+				// Query by numeric attribute: version = 2 (replaces version > 1 test)
+				version2Bitmap, err := q.ReconstructLatestNumericBitmap(ctx, "version", 2)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(versionGT1Bitmaps).To(HaveLen(1))
+				Expect(version2Bitmap).NotTo(BeNil())
 
-				// Combine bitmaps to get all IDs with version > 1
-				combinedBitmap := store.NewBitmap()
-				for _, bm := range versionGT1Bitmaps {
-					combinedBitmap.Or(bm.Bitmap)
-				}
+				version2IDs := version2Bitmap.ToArray()
+				Expect(version2IDs).To(HaveLen(1))
 
-				versionGT1IDs := combinedBitmap.ToArray()
-				Expect(versionGT1IDs).To(HaveLen(1))
-
-				versionGT1Payloads, err := q.RetrievePayloads(ctx, versionGT1IDs)
+				version2Payloads, err := q.RetrievePayloads(ctx, version2IDs)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(versionGT1Payloads).To(HaveLen(1))
-				Expect(versionGT1Payloads[0].NumericAttributes.Values["version"]).To(Equal(uint64(2)))
+				Expect(version2Payloads).To(HaveLen(1))
+				Expect(version2Payloads[0].NumericAttributes.Values["version"]).To(Equal(uint64(2)))
 
-				// Query by numeric attribute: priority >= 10
-				priorityGTE10Bitmaps, err := q.EvaluateNumericAttributeValueGreaterOrEqualThan(ctx, store.EvaluateNumericAttributeValueGreaterOrEqualThanParams{
-					Name:  "priority",
-					Value: 10,
-				})
+				// Query by numeric attribute: priority = 10 and priority = 20 (replaces priority >= 10 test)
+				priority10Bitmap, err := q.ReconstructLatestNumericBitmap(ctx, "priority", 10)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(priorityGTE10Bitmaps).To(HaveLen(2))
+				Expect(priority10Bitmap.GetCardinality()).To(Equal(uint64(1)))
 
+				priority20Bitmap, err := q.ReconstructLatestNumericBitmap(ctx, "priority", 20)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(priority20Bitmap.GetCardinality()).To(Equal(uint64(1)))
+
+				// Combine both priority bitmaps
 				priorityCombined := store.NewBitmap()
-				for _, bm := range priorityGTE10Bitmaps {
-					priorityCombined.Or(bm.Bitmap)
-				}
+				priorityCombined.Or(priority10Bitmap.Bitmap)
+				priorityCombined.Or(priority20Bitmap.Bitmap)
 
 				priorityIDs := priorityCombined.ToArray()
 				Expect(priorityIDs).To(HaveLen(2))
@@ -307,7 +290,7 @@ var _ = Describe("SQLiteStore", func() {
 
 			// Verify the update
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
+				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(row.Payload).To(Equal([]byte(`{"updated": true}`)))
@@ -319,21 +302,15 @@ var _ = Describe("SQLiteStore", func() {
 				Expect(row.NumericAttributes.Values["$createdAtBlock"]).To(Equal(uint64(100)))
 
 				// Verify old bitmap index is removed
-				oldStatusBitmap, err := q.EvaluateStringAttributeValueEqual(ctx, store.EvaluateStringAttributeValueEqualParams{
-					Name:  "status",
-					Value: "draft",
-				})
-				Expect(err).To(HaveOccurred()) // Should not find old value
+				oldStatusBitmap, err := q.ReconstructLatestStringBitmap(ctx, "status", "draft")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(oldStatusBitmap.IsEmpty()).To(BeTrue())
 
 				// Verify new bitmap index exists
-				newStatusBitmap, err := q.EvaluateStringAttributeValueEqual(ctx, store.EvaluateStringAttributeValueEqualParams{
-					Name:  "status",
-					Value: "published",
-				})
+				newStatusBitmap, err := q.ReconstructLatestStringBitmap(ctx, "status", "published")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(newStatusBitmap.ToArray()).To(HaveLen(1))
 
-				_ = oldStatusBitmap
 				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -385,7 +362,7 @@ var _ = Describe("SQLiteStore", func() {
 
 			// Verify entity exists
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				_, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
+				_, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).NotTo(HaveOccurred())
 				return nil
 			})
@@ -420,15 +397,13 @@ var _ = Describe("SQLiteStore", func() {
 
 			// Verify entity is deleted
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				_, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
+				_, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).To(HaveOccurred())
 
 				// Verify bitmap index is removed
-				_, err = q.EvaluateStringAttributeValueEqual(ctx, store.EvaluateStringAttributeValueEqualParams{
-					Name:  "deletable",
-					Value: "yes",
-				})
-				Expect(err).To(HaveOccurred())
+				deletableBitmap, err := q.ReconstructLatestStringBitmap(ctx, "deletable", "yes")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(deletableBitmap.IsEmpty()).To(BeTrue())
 
 				return nil
 			})
@@ -506,7 +481,7 @@ var _ = Describe("SQLiteStore", func() {
 
 			// Verify entity is expired (deleted)
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				_, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
+				_, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).To(HaveOccurred())
 				return nil
 			})
@@ -556,7 +531,7 @@ var _ = Describe("SQLiteStore", func() {
 			// Verify original expiration
 			var originalExpiration uint64
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
+				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).NotTo(HaveOccurred())
 				originalExpiration = row.NumericAttributes.Values["$expiration"]
 				Expect(originalExpiration).To(Equal(uint64(600))) // 100 + 500
@@ -595,27 +570,21 @@ var _ = Describe("SQLiteStore", func() {
 
 			// Verify extended expiration
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
+				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).NotTo(HaveOccurred())
 				newExpiration := row.NumericAttributes.Values["$expiration"]
 				Expect(newExpiration).To(Equal(uint64(1600)))
 
 				// Verify old expiration bitmap is removed
-				oldExpBitmap, err := q.EvaluateNumericAttributeValueEqual(ctx, store.EvaluateNumericAttributeValueEqualParams{
-					Name:  "$expiration",
-					Value: 600,
-				})
-				Expect(err).To(HaveOccurred())
+				oldExpBitmap, err := q.ReconstructLatestNumericBitmap(ctx, "$expiration", 600)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(oldExpBitmap.IsEmpty()).To(BeTrue())
 
 				// Verify new expiration bitmap exists
-				newExpBitmap, err := q.EvaluateNumericAttributeValueEqual(ctx, store.EvaluateNumericAttributeValueEqualParams{
-					Name:  "$expiration",
-					Value: 1600,
-				})
+				newExpBitmap, err := q.ReconstructLatestNumericBitmap(ctx, "$expiration", 1600)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(newExpBitmap.ToArray()).To(HaveLen(1))
 
-				_ = oldExpBitmap
 				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -664,7 +633,7 @@ var _ = Describe("SQLiteStore", func() {
 
 			// Verify original owner
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
+				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(row.StringAttributes.Values["$owner"]).To(Equal(strings.ToLower(originalOwner.Hex())))
 				Expect(row.StringAttributes.Values["$creator"]).To(Equal(strings.ToLower(originalOwner.Hex())))
@@ -703,28 +672,22 @@ var _ = Describe("SQLiteStore", func() {
 
 			// Verify new owner and creator preserved
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
+				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(row.StringAttributes.Values["$owner"]).To(Equal(strings.ToLower(newOwner.Hex())))
 				// $creator should be preserved
 				Expect(row.StringAttributes.Values["$creator"]).To(Equal(strings.ToLower(originalOwner.Hex())))
 
 				// Verify old owner bitmap is removed
-				oldOwnerBitmap, err := q.EvaluateStringAttributeValueEqual(ctx, store.EvaluateStringAttributeValueEqualParams{
-					Name:  "$owner",
-					Value: strings.ToLower(originalOwner.Hex()),
-				})
-				Expect(err).To(HaveOccurred())
+				oldOwnerBitmap, err := q.ReconstructLatestStringBitmap(ctx, "$owner", strings.ToLower(originalOwner.Hex()))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(oldOwnerBitmap.IsEmpty()).To(BeTrue())
 
 				// Verify new owner bitmap exists
-				newOwnerBitmap, err := q.EvaluateStringAttributeValueEqual(ctx, store.EvaluateStringAttributeValueEqualParams{
-					Name:  "$owner",
-					Value: strings.ToLower(newOwner.Hex()),
-				})
+				newOwnerBitmap, err := q.ReconstructLatestStringBitmap(ctx, "$owner", strings.ToLower(newOwner.Hex()))
 				Expect(err).NotTo(HaveOccurred())
 				Expect(newOwnerBitmap.ToArray()).To(HaveLen(1))
 
-				_ = oldOwnerBitmap
 				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -815,7 +778,7 @@ var _ = Describe("SQLiteStore", func() {
 
 			// Verify the update was applied
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
+				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(row.Payload).To(Equal([]byte("final update")))
 				Expect(row.StringAttributes.Values["status"]).To(Equal("v3"))
@@ -926,7 +889,7 @@ var _ = Describe("SQLiteStore", func() {
 			// With `continue operationLoop`, non-last updates are skipped but processing
 			// continues to the next operation. The last update for the key is applied.
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
+				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).NotTo(HaveOccurred())
 				// The last update (second one) should be applied
 				Expect(row.Payload).To(Equal([]byte("second update - last one")))
@@ -1013,7 +976,7 @@ var _ = Describe("SQLiteStore", func() {
 
 			// Verify original content is preserved
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
+				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(row.Payload).To(Equal([]byte("original")))
 				return nil
@@ -1077,7 +1040,7 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetPayloadForEntityKey(ctx, key.Bytes())
+				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
 				Expect(err).NotTo(HaveOccurred())
 
 				// String attributes

@@ -1,75 +1,97 @@
--- name: EvaluateAll :many
-SELECT id FROM payloads
-ORDER BY id DESC;
+-- Value-listing queries for query evaluation.
+-- Each returns distinct values matching a condition, filtered by block.
+-- The Go layer then reconstructs bitmaps for each matching value via XOR chains.
 
--- name: EvaluateStringAttributeValueEqual :one
-SELECT bitmap FROM string_attributes_values_bitmaps
-WHERE name = sqlc.arg(name) AND value = sqlc.arg(value);
+-- String attribute value queries
 
--- name: EvaluateNumericAttributeValueEqual :one
-SELECT bitmap FROM numeric_attributes_values_bitmaps
-WHERE name = sqlc.arg(name) AND value = sqlc.arg(value);
+-- name: GetMatchingStringValuesEqual :many
+SELECT DISTINCT value FROM string_attributes_values_bitmaps
+WHERE name = sqlc.arg(name) AND value = sqlc.arg(value)
+  AND block <= sqlc.arg(target_block);
 
--- name: EvaluateStringAttributeValueNotEqual :many
-SELECT bitmap FROM string_attributes_values_bitmaps
-WHERE name = sqlc.arg(name) AND value != sqlc.arg(value);
+-- name: GetMatchingStringValuesNotEqual :many
+SELECT DISTINCT value FROM string_attributes_values_bitmaps
+WHERE name = sqlc.arg(name) AND value != sqlc.arg(value)
+  AND block <= sqlc.arg(target_block);
 
--- name: EvaluateNumericAttributeValueNotEqual :many
-SELECT bitmap FROM numeric_attributes_values_bitmaps
-WHERE name = sqlc.arg(name) AND value != sqlc.arg(value);
+-- name: GetMatchingStringValuesLessThan :many
+SELECT DISTINCT value FROM string_attributes_values_bitmaps
+WHERE name = sqlc.arg(name) AND value < sqlc.arg(value)
+  AND block <= sqlc.arg(target_block);
 
--- name: EvaluateStringAttributeValueLowerThan :many
-SELECT bitmap FROM string_attributes_values_bitmaps
-WHERE name = sqlc.arg(name) AND value < sqlc.arg(value);
+-- name: GetMatchingStringValuesGreaterThan :many
+SELECT DISTINCT value FROM string_attributes_values_bitmaps
+WHERE name = sqlc.arg(name) AND value > sqlc.arg(value)
+  AND block <= sqlc.arg(target_block);
 
--- name: EvaluateStringAttributeValueGreaterThan :many
-SELECT bitmap FROM string_attributes_values_bitmaps
-WHERE name = sqlc.arg(name) AND value > sqlc.arg(value);
+-- name: GetMatchingStringValuesLessOrEqualThan :many
+SELECT DISTINCT value FROM string_attributes_values_bitmaps
+WHERE name = sqlc.arg(name) AND value <= sqlc.arg(value)
+  AND block <= sqlc.arg(target_block);
 
--- name: EvaluateStringAttributeValueLessOrEqualThan :many
-SELECT bitmap FROM string_attributes_values_bitmaps
-WHERE name = sqlc.arg(name) AND value <= sqlc.arg(value);
+-- name: GetMatchingStringValuesGreaterOrEqualThan :many
+SELECT DISTINCT value FROM string_attributes_values_bitmaps
+WHERE name = sqlc.arg(name) AND value >= sqlc.arg(value)
+  AND block <= sqlc.arg(target_block);
 
--- name: EvaluateStringAttributeValueGreaterOrEqualThan :many
-SELECT bitmap FROM string_attributes_values_bitmaps
-WHERE name = sqlc.arg(name) AND value >= sqlc.arg(value);
+-- name: GetMatchingStringValuesGlob :many
+SELECT DISTINCT value FROM string_attributes_values_bitmaps
+WHERE name = sqlc.arg(name) AND value GLOB sqlc.arg(value)
+  AND block <= sqlc.arg(target_block);
 
--- name: EvaluateStringAttributeValueGlob :many
-SELECT bitmap FROM string_attributes_values_bitmaps
-WHERE name = sqlc.arg(name) AND value GLOB sqlc.arg(value);
+-- name: GetMatchingStringValuesNotGlob :many
+SELECT DISTINCT value FROM string_attributes_values_bitmaps
+WHERE name = sqlc.arg(name) AND value NOT GLOB sqlc.arg(value)
+  AND block <= sqlc.arg(target_block);
 
--- name: EvaluateStringAttributeValueNotGlob :many
-SELECT bitmap FROM string_attributes_values_bitmaps
-WHERE name = sqlc.arg(name) AND value NOT GLOB sqlc.arg(value);
+-- name: GetMatchingStringValuesInclusion :many
+SELECT DISTINCT value FROM string_attributes_values_bitmaps
+WHERE name = sqlc.arg(name) AND value IN (sqlc.slice('values'))
+  AND block <= sqlc.arg(target_block);
 
--- name: EvaluateStringAttributeValueNotInclusion :many
-SELECT bitmap FROM string_attributes_values_bitmaps
-WHERE name = sqlc.arg(name) AND value NOT IN (sqlc.Slice('values'));
+-- name: GetMatchingStringValuesNotInclusion :many
+SELECT DISTINCT value FROM string_attributes_values_bitmaps
+WHERE name = sqlc.arg(name) AND value NOT IN (sqlc.slice('values'))
+  AND block <= sqlc.arg(target_block);
 
--- name: EvaluateStringAttributeValueInclusion :many
-SELECT bitmap FROM string_attributes_values_bitmaps
-WHERE name = sqlc.arg(name) AND value IN (sqlc.Slice('values'));
+-- Numeric attribute value queries
 
--- name: EvaluateNumericAttributeValueLowerThan :many
-SELECT bitmap FROM numeric_attributes_values_bitmaps
-WHERE name = sqlc.arg(name) AND value < sqlc.arg(value);
+-- name: GetMatchingNumericValuesEqual :many
+SELECT DISTINCT value FROM numeric_attributes_values_bitmaps
+WHERE name = sqlc.arg(name) AND value = sqlc.arg(value)
+  AND block <= sqlc.arg(target_block);
 
--- name: EvaluateNumericAttributeValueGreaterThan :many
-SELECT bitmap FROM numeric_attributes_values_bitmaps
-WHERE name = sqlc.arg(name) AND value > sqlc.arg(value);
+-- name: GetMatchingNumericValuesNotEqual :many
+SELECT DISTINCT value FROM numeric_attributes_values_bitmaps
+WHERE name = sqlc.arg(name) AND value != sqlc.arg(value)
+  AND block <= sqlc.arg(target_block);
 
--- name: EvaluateNumericAttributeValueLessOrEqualThan :many
-SELECT bitmap FROM numeric_attributes_values_bitmaps
-WHERE name = sqlc.arg(name) AND value <= sqlc.arg(value);
+-- name: GetMatchingNumericValuesLessThan :many
+SELECT DISTINCT value FROM numeric_attributes_values_bitmaps
+WHERE name = sqlc.arg(name) AND value < sqlc.arg(value)
+  AND block <= sqlc.arg(target_block);
 
--- name: EvaluateNumericAttributeValueGreaterOrEqualThan :many
-SELECT bitmap FROM numeric_attributes_values_bitmaps
-WHERE name = sqlc.arg(name) AND value >= sqlc.arg(value);
+-- name: GetMatchingNumericValuesGreaterThan :many
+SELECT DISTINCT value FROM numeric_attributes_values_bitmaps
+WHERE name = sqlc.arg(name) AND value > sqlc.arg(value)
+  AND block <= sqlc.arg(target_block);
 
--- name: EvaluateNumericAttributeValueInclusion :many
-SELECT bitmap FROM numeric_attributes_values_bitmaps
-WHERE name = sqlc.arg(name) AND value IN (sqlc.Slice('values'));
+-- name: GetMatchingNumericValuesLessOrEqualThan :many
+SELECT DISTINCT value FROM numeric_attributes_values_bitmaps
+WHERE name = sqlc.arg(name) AND value <= sqlc.arg(value)
+  AND block <= sqlc.arg(target_block);
 
--- name: EvaluateNumericAttributeValueNotInclusion :many
-SELECT bitmap FROM numeric_attributes_values_bitmaps
-WHERE name = sqlc.arg(name) AND value NOT IN (sqlc.Slice('values'));
+-- name: GetMatchingNumericValuesGreaterOrEqualThan :many
+SELECT DISTINCT value FROM numeric_attributes_values_bitmaps
+WHERE name = sqlc.arg(name) AND value >= sqlc.arg(value)
+  AND block <= sqlc.arg(target_block);
+
+-- name: GetMatchingNumericValuesInclusion :many
+SELECT DISTINCT value FROM numeric_attributes_values_bitmaps
+WHERE name = sqlc.arg(name) AND value IN (sqlc.slice('values'))
+  AND block <= sqlc.arg(target_block);
+
+-- name: GetMatchingNumericValuesNotInclusion :many
+SELECT DISTINCT value FROM numeric_attributes_values_bitmaps
+WHERE name = sqlc.arg(name) AND value NOT IN (sqlc.slice('values'))
+  AND block <= sqlc.arg(target_block);
