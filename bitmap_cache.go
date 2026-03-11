@@ -3,10 +3,8 @@ package sqlitebitmapstore
 import (
 	"context"
 	"fmt"
-	"runtime"
 
 	"github.com/Arkiv-Network/sqlite-bitmap-store/store"
-	"golang.org/x/sync/errgroup"
 )
 
 type nameValue[T any] struct {
@@ -152,31 +150,15 @@ func (c *bitmapCache) SetBlock(block uint64) {
 }
 
 func (c *bitmapCache) Flush(ctx context.Context) (err error) {
-	// RunOptimize all bitmaps in parallel (CPU-bound).
-	eg := &errgroup.Group{}
-	eg.SetLimit(runtime.NumCPU())
-
 	for _, bitmap := range c.stringBitmaps {
 		if !bitmap.IsEmpty() {
-			eg.Go(func() error {
-				bitmap.RunOptimize()
-				return nil
-			})
+			bitmap.RunOptimize()
 		}
 	}
-
 	for _, bitmap := range c.numericBitmaps {
 		if !bitmap.IsEmpty() {
-			eg.Go(func() error {
-				bitmap.RunOptimize()
-				return nil
-			})
+			bitmap.RunOptimize()
 		}
-	}
-
-	err = eg.Wait()
-	if err != nil {
-		return fmt.Errorf("failed to run optimize: %w", err)
 	}
 
 	// Write string bitmaps as keyframes or deltas.

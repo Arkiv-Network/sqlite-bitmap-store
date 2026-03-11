@@ -488,12 +488,12 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 				}
 
-				err = cache.Flush(ctx)
-				if err != nil {
-					return fmt.Errorf("failed to flush bitmap cache for block %d: %w", block.Number, err)
-				}
-
 				s.log.Info("block updated", "block", block.Number, "creates", blockStat.creates, "updates", blockStat.updates, "deletes", blockStat.deletes, "extends", blockStat.extends, "ownerChanges", blockStat.ownerChanges)
+			}
+
+			err = cache.Flush(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to flush bitmap cache: %w", err)
 			}
 
 			err = st.UpsertLastBlock(ctx, lastBlock)
