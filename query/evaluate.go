@@ -2,19 +2,17 @@ package query
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 
-	"github.com/Arkiv-Network/sqlite-bitmap-store/store"
 	"github.com/RoaringBitmap/roaring/v2/roaring64"
 )
 
 func (t *AST) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
+	eval Evaluator,
 ) (*roaring64.Bitmap, error) {
 	if t.Expr == nil {
-		ids, err := q.EvaluateAll(ctx)
+		ids, err := eval.EvaluateAllCurrent(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -22,24 +20,24 @@ func (t *AST) Evaluate(
 		bm.AddMany(ids)
 		return bm, nil
 	}
-	return t.Expr.Evaluate(ctx, q)
+	return t.Expr.Evaluate(ctx, eval)
 }
 
 func (e *ASTExpr) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
+	eval Evaluator,
 ) (*roaring64.Bitmap, error) {
-	return e.Or.Evaluate(ctx, q)
+	return e.Or.Evaluate(ctx, eval)
 }
 
 func (e *ASTOr) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
+	eval Evaluator,
 ) (*roaring64.Bitmap, error) {
-	var tmp *roaring64.Bitmap = nil
+	var tmp *roaring64.Bitmap
 
 	for _, term := range e.Terms {
-		bm, err := term.Evaluate(ctx, q)
+		bm, err := term.Evaluate(ctx, eval)
 		if err != nil {
 			return nil, err
 		}
@@ -55,12 +53,12 @@ func (e *ASTOr) Evaluate(
 
 func (e *ASTAnd) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
+	eval Evaluator,
 ) (*roaring64.Bitmap, error) {
-	var tmp *roaring64.Bitmap = nil
+	var tmp *roaring64.Bitmap
 
 	for _, term := range e.Terms {
-		bm, err := term.Evaluate(ctx, q)
+		bm, err := term.Evaluate(ctx, eval)
 		if err != nil {
 			return nil, err
 		}
@@ -76,338 +74,211 @@ func (e *ASTAnd) Evaluate(
 
 func (e *ASTTerm) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
+	eval Evaluator,
 ) (*roaring64.Bitmap, error) {
 	switch {
 	case e.Assign != nil:
-		return e.Assign.Evaluate(ctx, q)
+		return e.Assign.Evaluate(ctx, eval)
 	case e.Inclusion != nil:
-		return e.Inclusion.Evaluate(ctx, q)
+		return e.Inclusion.Evaluate(ctx, eval)
 	case e.LessThan != nil:
-		return e.LessThan.Evaluate(ctx, q)
+		return e.LessThan.Evaluate(ctx, eval)
 	case e.LessOrEqualThan != nil:
-		return e.LessOrEqualThan.Evaluate(ctx, q)
+		return e.LessOrEqualThan.Evaluate(ctx, eval)
 	case e.GreaterThan != nil:
-		return e.GreaterThan.Evaluate(ctx, q)
+		return e.GreaterThan.Evaluate(ctx, eval)
 	case e.GreaterOrEqualThan != nil:
-		return e.GreaterOrEqualThan.Evaluate(ctx, q)
+		return e.GreaterOrEqualThan.Evaluate(ctx, eval)
 	case e.Glob != nil:
-		return e.Glob.Evaluate(ctx, q)
+		return e.Glob.Evaluate(ctx, eval)
 	default:
 		return nil, fmt.Errorf("unknown equal expression: %v", e)
 	}
 }
 
+func reconstructStringBitmapsOR(ctx context.Context, eval Evaluator, name string, values []string) (*roaring64.Bitmap, error) {
+	bm := roaring64.New()
+	for _, v := range values {
+		b, err := eval.ReconstructStringBitmap(ctx, name, v)
+		if err != nil {
+			return nil, err
+		}
+		bm.Or(b.Bitmap)
+	}
+	return bm, nil
+}
+
+func reconstructNumericBitmapsOR(ctx context.Context, eval Evaluator, name string, values []uint64) (*roaring64.Bitmap, error) {
+	bm := roaring64.New()
+	for _, v := range values {
+		b, err := eval.ReconstructNumericBitmap(ctx, name, v)
+		if err != nil {
+			return nil, err
+		}
+		bm.Or(b.Bitmap)
+	}
+	return bm, nil
+}
+
 func (e *Glob) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
-) (_ *roaring64.Bitmap, err error) {
-
-	bm := roaring64.New()
-
-	var bitmaps []*store.Bitmap
+	eval Evaluator,
+) (*roaring64.Bitmap, error) {
+	var values []string
+	var err error
 
 	if e.IsNot {
-		bitmaps, err = q.EvaluateStringAttributeValueNotGlob(ctx, store.EvaluateStringAttributeValueNotGlobParams{
-			Name:  e.Var,
-			Value: e.Value,
-		})
-		if err != nil {
-			return nil, err
-		}
+		values, err = eval.GetMatchingStringValuesNotGlob(ctx, e.Var, e.Value)
 	} else {
-		bitmaps, err = q.EvaluateStringAttributeValueGlob(ctx, store.EvaluateStringAttributeValueGlobParams{
-			Name:  e.Var,
-			Value: e.Value,
-		})
-		if err != nil {
-			return nil, err
-		}
+		values, err = eval.GetMatchingStringValuesGlob(ctx, e.Var, e.Value)
+	}
+	if err != nil {
+		return nil, err
 	}
 
-	for _, bitmap := range bitmaps {
-		bm.Or(bitmap.Bitmap)
-	}
-
-	return bm, nil
+	return reconstructStringBitmapsOR(ctx, eval, e.Var, values)
 }
 
 func (e *LessThan) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
-) (_ *roaring64.Bitmap, err error) {
-
-	var bitmaps []*store.Bitmap
-
+	eval Evaluator,
+) (*roaring64.Bitmap, error) {
 	if e.Value.String != nil {
-		bitmaps, err = q.EvaluateStringAttributeValueLowerThan(ctx, store.EvaluateStringAttributeValueLowerThanParams{
-			Name:  e.Var,
-			Value: *e.Value.String,
-		})
+		values, err := eval.GetMatchingStringValuesLessThan(ctx, e.Var, *e.Value.String)
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		bitmaps, err = q.EvaluateNumericAttributeValueLowerThan(ctx, store.EvaluateNumericAttributeValueLowerThanParams{
-			Name:  e.Var,
-			Value: *e.Value.Number,
-		})
-		if err != nil {
-			return nil, err
-		}
+		return reconstructStringBitmapsOR(ctx, eval, e.Var, values)
 	}
 
-	bm := roaring64.New()
-
-	for _, bitmap := range bitmaps {
-		bm.Or(bitmap.Bitmap)
+	values, err := eval.GetMatchingNumericValuesLessThan(ctx, e.Var, *e.Value.Number)
+	if err != nil {
+		return nil, err
 	}
-
-	return bm, nil
+	return reconstructNumericBitmapsOR(ctx, eval, e.Var, values)
 }
 
 func (e *LessOrEqualThan) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
-) (_ *roaring64.Bitmap, err error) {
-
-	var bitmaps []*store.Bitmap
-
+	eval Evaluator,
+) (*roaring64.Bitmap, error) {
 	if e.Value.String != nil {
-		bitmaps, err = q.EvaluateStringAttributeValueLessOrEqualThan(ctx, store.EvaluateStringAttributeValueLessOrEqualThanParams{
-			Name:  e.Var,
-			Value: *e.Value.String,
-		})
+		values, err := eval.GetMatchingStringValuesLessOrEqualThan(ctx, e.Var, *e.Value.String)
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		bitmaps, err = q.EvaluateNumericAttributeValueLessOrEqualThan(ctx, store.EvaluateNumericAttributeValueLessOrEqualThanParams{
-			Name:  e.Var,
-			Value: *e.Value.Number,
-		})
-		if err != nil {
-			return nil, err
-		}
+		return reconstructStringBitmapsOR(ctx, eval, e.Var, values)
 	}
 
-	bm := roaring64.New()
-
-	for _, bitmap := range bitmaps {
-		bm.Or(bitmap.Bitmap)
+	values, err := eval.GetMatchingNumericValuesLessOrEqualThan(ctx, e.Var, *e.Value.Number)
+	if err != nil {
+		return nil, err
 	}
-
-	return bm, nil
+	return reconstructNumericBitmapsOR(ctx, eval, e.Var, values)
 }
 
 func (e *GreaterThan) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
-) (_ *roaring64.Bitmap, err error) {
-
-	var bitmaps []*store.Bitmap
-
+	eval Evaluator,
+) (*roaring64.Bitmap, error) {
 	if e.Value.String != nil {
-		bitmaps, err = q.EvaluateStringAttributeValueGreaterThan(ctx, store.EvaluateStringAttributeValueGreaterThanParams{
-			Name:  e.Var,
-			Value: *e.Value.String,
-		})
+		values, err := eval.GetMatchingStringValuesGreaterThan(ctx, e.Var, *e.Value.String)
 		if err != nil {
 			return nil, err
 		}
-
-	} else {
-		bitmaps, err = q.EvaluateNumericAttributeValueGreaterThan(ctx, store.EvaluateNumericAttributeValueGreaterThanParams{
-			Name:  e.Var,
-			Value: *e.Value.Number,
-		})
-		if err != nil {
-			return nil, err
-		}
+		return reconstructStringBitmapsOR(ctx, eval, e.Var, values)
 	}
 
-	bm := roaring64.New()
-
-	for _, bitmap := range bitmaps {
-		bm.Or(bitmap.Bitmap)
+	values, err := eval.GetMatchingNumericValuesGreaterThan(ctx, e.Var, *e.Value.Number)
+	if err != nil {
+		return nil, err
 	}
-
-	return bm, nil
+	return reconstructNumericBitmapsOR(ctx, eval, e.Var, values)
 }
 
 func (e *GreaterOrEqualThan) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
-) (_ *roaring64.Bitmap, err error) {
-
-	var bitmaps []*store.Bitmap
-
+	eval Evaluator,
+) (*roaring64.Bitmap, error) {
 	if e.Value.String != nil {
-		bitmaps, err = q.EvaluateStringAttributeValueGreaterOrEqualThan(ctx, store.EvaluateStringAttributeValueGreaterOrEqualThanParams{
-			Name:  e.Var,
-			Value: *e.Value.String,
-		})
+		values, err := eval.GetMatchingStringValuesGreaterOrEqualThan(ctx, e.Var, *e.Value.String)
 		if err != nil {
 			return nil, err
 		}
-
-	} else {
-		bitmaps, err = q.EvaluateNumericAttributeValueGreaterOrEqualThan(ctx, store.EvaluateNumericAttributeValueGreaterOrEqualThanParams{
-			Name:  e.Var,
-			Value: *e.Value.Number,
-		})
-		if err != nil {
-			return nil, err
-		}
+		return reconstructStringBitmapsOR(ctx, eval, e.Var, values)
 	}
 
-	bm := roaring64.New()
-
-	for _, bitmap := range bitmaps {
-		bm.Or(bitmap.Bitmap)
+	values, err := eval.GetMatchingNumericValuesGreaterOrEqualThan(ctx, e.Var, *e.Value.Number)
+	if err != nil {
+		return nil, err
 	}
-
-	return bm, nil
+	return reconstructNumericBitmapsOR(ctx, eval, e.Var, values)
 }
 
 func (e *Equality) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
-) (_ *roaring64.Bitmap, err error) {
-
+	eval Evaluator,
+) (*roaring64.Bitmap, error) {
 	if e.Value.String != nil {
-
 		if e.IsNot {
-
-			var bitmaps []*store.Bitmap
-			bitmaps, err = q.EvaluateStringAttributeValueNotEqual(ctx, store.EvaluateStringAttributeValueNotEqualParams{
-				Name:  e.Var,
-				Value: *e.Value.String,
-			})
+			values, err := eval.GetMatchingStringValuesNotEqual(ctx, e.Var, *e.Value.String)
 			if err != nil {
 				return nil, err
 			}
-
-			bm := roaring64.New()
-
-			for _, bitmap := range bitmaps {
-				bm.Or(bitmap.Bitmap)
-			}
-
-			return bm, nil
-
-		} else {
-			bm, err := q.EvaluateStringAttributeValueEqual(ctx, store.EvaluateStringAttributeValueEqualParams{
-				Name:  e.Var,
-				Value: *e.Value.String,
-			})
-
-			if err == sql.ErrNoRows {
-				return roaring64.New(), nil
-			}
-
-			if err != nil {
-				return nil, err
-			}
-
-			return bm.Bitmap, nil
+			return reconstructStringBitmapsOR(ctx, eval, e.Var, values)
 		}
-	} else {
-		if e.IsNot {
 
-			var bitmaps []*store.Bitmap
-			bitmaps, err = q.EvaluateNumericAttributeValueNotEqual(ctx, store.EvaluateNumericAttributeValueNotEqualParams{
-				Name:  e.Var,
-				Value: *e.Value.Number,
-			})
-			if err != nil {
-				return nil, err
-			}
-
-			bm := roaring64.New()
-			for _, bitmap := range bitmaps {
-				bm.Or(bitmap.Bitmap)
-			}
-
-			return bm, nil
-		} else {
-			bitmap, err := q.EvaluateNumericAttributeValueEqual(ctx, store.EvaluateNumericAttributeValueEqualParams{
-				Name:  e.Var,
-				Value: *e.Value.Number,
-			})
-
-			if err == sql.ErrNoRows {
-				return roaring64.New(), nil
-			}
-
-			if err != nil {
-				return nil, err
-			}
-
-			return bitmap.Bitmap, nil
+		values, err := eval.GetMatchingStringValuesEqual(ctx, e.Var, *e.Value.String)
+		if err != nil {
+			return nil, err
 		}
+		return reconstructStringBitmapsOR(ctx, eval, e.Var, values)
 	}
 
+	if e.IsNot {
+		values, err := eval.GetMatchingNumericValuesNotEqual(ctx, e.Var, *e.Value.Number)
+		if err != nil {
+			return nil, err
+		}
+		return reconstructNumericBitmapsOR(ctx, eval, e.Var, values)
+	}
+
+	values, err := eval.GetMatchingNumericValuesEqual(ctx, e.Var, *e.Value.Number)
+	if err != nil {
+		return nil, err
+	}
+	return reconstructNumericBitmapsOR(ctx, eval, e.Var, values)
 }
 
 func (e *Inclusion) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
-) (_ *roaring64.Bitmap, err error) {
-
+	eval Evaluator,
+) (*roaring64.Bitmap, error) {
 	if len(e.Values.Strings) != 0 {
-
-		var bitmaps []*store.Bitmap
-
-		if e.IsNot {
-			bitmaps, err = q.EvaluateStringAttributeValueNotInclusion(ctx, store.EvaluateStringAttributeValueNotInclusionParams{
-				Name:   e.Var,
-				Values: e.Values.Strings,
-			})
-			if err != nil {
-				return nil, err
-			}
-		} else {
-
-			bitmaps, err = q.EvaluateStringAttributeValueInclusion(ctx, store.EvaluateStringAttributeValueInclusionParams{
-				Name:   e.Var,
-				Values: e.Values.Strings,
-			})
-			if err != nil {
-				return nil, err
-			}
-		}
-		bm := roaring64.New()
-		for _, bitmap := range bitmaps {
-			bm.Or(bitmap.Bitmap)
-		}
-		return bm, nil
-
-	} else {
-		var bitmaps []*store.Bitmap
+		var values []string
+		var err error
 
 		if e.IsNot {
-			bitmaps, err = q.EvaluateNumericAttributeValueNotInclusion(ctx, store.EvaluateNumericAttributeValueNotInclusionParams{
-				Name:   e.Var,
-				Values: e.Values.Numbers,
-			})
-			if err != nil {
-				return nil, err
-			}
+			values, err = eval.GetMatchingStringValuesNotInclusion(ctx, e.Var, e.Values.Strings)
 		} else {
-			bitmaps, err = q.EvaluateNumericAttributeValueInclusion(ctx, store.EvaluateNumericAttributeValueInclusionParams{
-				Name:   e.Var,
-				Values: e.Values.Numbers,
-			})
-			if err != nil {
-				return nil, err
-			}
+			values, err = eval.GetMatchingStringValuesInclusion(ctx, e.Var, e.Values.Strings)
 		}
-		bm := roaring64.New()
-		for _, bitmap := range bitmaps {
-			bm.Or(bitmap.Bitmap)
+		if err != nil {
+			return nil, err
 		}
-		return bm, nil
+		return reconstructStringBitmapsOR(ctx, eval, e.Var, values)
 	}
 
+	var values []uint64
+	var err error
+
+	if e.IsNot {
+		values, err = eval.GetMatchingNumericValuesNotInclusion(ctx, e.Var, e.Values.Numbers)
+	} else {
+		values, err = eval.GetMatchingNumericValuesInclusion(ctx, e.Var, e.Values.Numbers)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return reconstructNumericBitmapsOR(ctx, eval, e.Var, values)
 }

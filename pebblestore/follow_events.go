@@ -1,31 +1,22 @@
-package sqlitebitmapstore
+package pebblestore
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"fmt"
-	"log/slog"
 	"maps"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/Arkiv-Network/sqlite-bitmap-store/store"
+	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/sqlite3"
-	"github.com/golang-migrate/migrate/v4/source/iofs"
-	_ "github.com/mattn/go-sqlite3"
 
 	arkivevents "github.com/Arkiv-Network/arkiv-events"
 	"github.com/Arkiv-Network/arkiv-events/events"
+	"github.com/Arkiv-Network/sqlite-bitmap-store/store"
 )
 
 var (
-	// Metrics for tracking operations
 	metricOperationStarted    = metrics.NewRegisteredCounter("arkiv_store/operations_started", nil)
 	metricOperationSuccessful = metrics.NewRegisteredCounter("arkiv_store/operations_successful", nil)
 	metricCreates             = metrics.NewRegisteredCounter("arkiv_store/creates", nil)
@@ -36,87 +27,8 @@ var (
 	metricDeletesBytes        = metrics.NewRegisteredCounter("arkiv_store/deletes_bytes", nil)
 	metricExtends             = metrics.NewRegisteredCounter("arkiv_store/extends", nil)
 	metricOwnerChanges        = metrics.NewRegisteredCounter("arkiv_store/owner_changes", nil)
-	// Tracks operation duration (ms) using an exponential decay sample so the histogram
-	// is more responsive to recent performance by weighting newer measurements higher
-	// (sample size 100, alpha 0.4).
-	metricOperationTime = metrics.NewRegisteredHistogram("arkiv_store/operation_time_ms", nil, metrics.NewExpDecaySample(100, 0.4))
+	metricOperationTime       = metrics.NewRegisteredHistogram("arkiv_store/operation_time_ms", nil, metrics.NewExpDecaySample(100, 0.4))
 )
-
-type SQLiteStore struct {
-	writePool *sql.DB
-	readPool  *sql.DB
-	log       *slog.Logger
-}
-
-func NewSQLiteStore(
-	log *slog.Logger,
-	dbPath string,
-	numberOfReadThreads int,
-) (*SQLiteStore, error) {
-
-	err := os.MkdirAll(filepath.Dir(dbPath), 0755)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create directory: %w", err)
-	}
-
-	writeURL := fmt.Sprintf("file:%s?mode=rwc&_busy_timeout=11000&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true&_txlock=immediate&_cache_size=65536", dbPath)
-
-	writePool, err := sql.Open("sqlite3", writeURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open write pool: %w", err)
-	}
-
-	readURL := fmt.Sprintf("file:%s?_query_only=true&_busy_timeout=11000&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true&_txlock=deferred&_cache_size=65536", dbPath)
-	readPool, err := sql.Open("sqlite3", readURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open read pool: %w", err)
-	}
-
-	readPool.SetMaxOpenConns(numberOfReadThreads)
-	readPool.SetMaxIdleConns(numberOfReadThreads)
-	readPool.SetConnMaxLifetime(0)
-	readPool.SetConnMaxIdleTime(0)
-
-	err = runMigrations(writePool)
-	if err != nil {
-		writePool.Close()
-		readPool.Close()
-		return nil, fmt.Errorf("failed to run migrations: %w", err)
-	}
-
-	return &SQLiteStore{writePool: writePool, readPool: readPool, log: log}, nil
-}
-
-func runMigrations(db *sql.DB) error {
-	sourceDriver, err := iofs.New(store.Migrations, "schema")
-	if err != nil {
-		return fmt.Errorf("failed to create migration source: %w", err)
-	}
-
-	dbDriver, err := sqlite3.WithInstance(db, &sqlite3.Config{})
-	if err != nil {
-		return fmt.Errorf("failed to create database driver: %w", err)
-	}
-
-	m, err := migrate.NewWithInstance("iofs", sourceDriver, "sqlite3", dbDriver)
-	if err != nil {
-		return fmt.Errorf("failed to create migrate instance: %w", err)
-	}
-
-	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		return fmt.Errorf("failed to run migrations: %w", err)
-	}
-
-	return nil
-}
-
-func (s *SQLiteStore) Close() error {
-	return s.writePool.Close()
-}
-
-func (s *SQLiteStore) GetLastBlock(ctx context.Context) (uint64, error) {
-	return store.New(s.writePool).GetLastBlock(ctx)
-}
 
 type blockStats struct {
 	creates      int64
@@ -129,60 +41,49 @@ type blockStats struct {
 	ownerChanges int64
 }
 
-func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.BatchIterator) error {
-
+// FollowEvents consumes batches of block events from the iterator and applies
+// them to the PebbleDB store. Each batch is processed within a single
+// IndexedBatch (which supports read-your-own-writes) and committed atomically.
+func (s *PebbleStore) FollowEvents(ctx context.Context, iterator arkivevents.BatchIterator) error {
 	for batch := range iterator {
 		if batch.Error != nil {
 			return fmt.Errorf("failed to follow events: %w", batch.Error)
 		}
 
-		// We will calculate totals for the log at the end, but track per-block for metrics
 		stats := make(map[uint64]*blockStats)
 
 		err := func() error {
-
-			tx, err := s.writePool.BeginTx(ctx, &sql.TxOptions{
-				Isolation: sql.LevelSerializable,
-				ReadOnly:  false,
-			})
-			if err != nil {
-				return fmt.Errorf("failed to begin transaction: %w", err)
-			}
-			defer tx.Rollback()
-
-			st := store.New(tx)
+			pBatch := s.db.NewIndexedBatch()
+			defer pBatch.Close()
 
 			firstBlock := batch.Batch.Blocks[0].Number
 			lastBlock := batch.Batch.Blocks[len(batch.Batch.Blocks)-1].Number
 			s.log.Info("new batch", "firstBlock", firstBlock, "lastBlock", lastBlock)
 
-			lastBlockFromDB, err := st.GetLastBlock(ctx)
+			lastBlockFromDB, err := s.GetLastBlock()
 			if err != nil {
 				return fmt.Errorf("failed to get last block from database: %w", err)
 			}
 
-			cache := newBitmapCache(st)
+			cache := newBitmapCache(s, pBatch, pBatch)
 
 			startTime := time.Now()
-
 			metricOperationStarted.Inc(1)
 
 		mainLoop:
 			for _, block := range batch.Batch.Blocks {
 
-				if block.Number <= uint64(lastBlockFromDB) {
+				if block.Number <= lastBlockFromDB {
 					s.log.Info("skipping block", "block", block.Number, "lastBlockFromDB", lastBlockFromDB)
 					continue mainLoop
 				}
 
-				// Initialize stats for this block
 				if _, ok := stats[block.Number]; !ok {
 					stats[block.Number] = &blockStats{}
 				}
 				blockStat := stats[block.Number]
 
 				updatesMap := map[common.Hash][]*events.OPUpdate{}
-
 				for _, operation := range block.Operations {
 					if operation.Update != nil {
 						currentUpdates := updatesMap[operation.Update.Key]
@@ -197,16 +98,13 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 					switch {
 
 					case operation.Create != nil:
-						// expiresAtBlock := blockNumber + operation.Create.BTL
 						blockStat.creates++
 						blockStat.createsBytes += int64(len(operation.Create.Content))
-						key := operation.Create.Key
 
 						stringAttributes := maps.Clone(operation.Create.StringAttributes)
-
 						stringAttributes["$owner"] = strings.ToLower(operation.Create.Owner.Hex())
 						stringAttributes["$creator"] = strings.ToLower(operation.Create.Owner.Hex())
-						stringAttributes["$key"] = strings.ToLower(key.Hex())
+						stringAttributes["$key"] = strings.ToLower(operation.Create.Key.Hex())
 
 						untilBlock := block.Number + operation.Create.BTL
 						numericAttributes := maps.Clone(operation.Create.NumericAttributes)
@@ -219,64 +117,56 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						numericAttributes["$txIndex"] = uint64(operation.TxIndex)
 						numericAttributes["$opIndex"] = uint64(operation.OpIndex)
 
-						id, err := st.UpsertPayload(
-							ctx,
-							store.UpsertPayloadParams{
-								EntityKey:         operation.Create.Key.Bytes(),
-								Payload:           operation.Create.Content,
-								ContentType:       operation.Create.ContentType,
-								StringAttributes:  store.NewStringAttributes(stringAttributes),
-								NumericAttributes: store.NewNumericAttributes(numericAttributes),
-							},
-						)
+						id, err := s.UpsertPayload(pBatch, pBatch, UpsertPayloadParams{
+							EntityKey:         operation.Create.Key.Bytes(),
+							Payload:           operation.Create.Content,
+							ContentType:       operation.Create.ContentType,
+							StringAttributes:  store.NewStringAttributes(stringAttributes),
+							NumericAttributes: store.NewNumericAttributes(numericAttributes),
+						})
 						if err != nil {
-							return fmt.Errorf("failed to insert payload %s at block %d txIndex %d opIndex %d: %w", key.Hex(), block.Number, operation.TxIndex, operation.OpIndex, err)
+							return fmt.Errorf("failed to insert payload %s at block %d txIndex %d opIndex %d: %w",
+								operation.Create.Key.Hex(), block.Number, operation.TxIndex, operation.OpIndex, err)
 						}
 
 						for k, v := range stringAttributes {
-							err = cache.AddToStringBitmap(ctx, k, v, id)
-							if err != nil {
+							if err := cache.AddToStringBitmap(k, v, id); err != nil {
 								return fmt.Errorf("failed to add string attribute value bitmap: %w", err)
 							}
 						}
 
 						for k, v := range numericAttributes {
-
-							// skip txIndex and opIndex because they are not used for querying
 							switch k {
 							case "$txIndex", "$opIndex":
 								continue
 							}
-
-							err = cache.AddToNumericBitmap(ctx, k, v, id)
-							if err != nil {
+							if err := cache.AddToNumericBitmap(k, v, id); err != nil {
 								return fmt.Errorf("failed to add numeric attribute value bitmap: %w", err)
 							}
 						}
-					case operation.Update != nil:
 
+					case operation.Update != nil:
 						updates := updatesMap[operation.Update.Key]
 						lastUpdate := updates[len(updates)-1]
 
 						if operation.Update != lastUpdate {
 							continue operationLoop
 						}
+
 						blockStat.updates++
 						blockStat.updatesBytes += int64(len(operation.Update.Content))
 
 						key := operation.Update.Key.Bytes()
 
-						latestPayload, err := st.GetPayloadForEntityKey(ctx, key)
+						latestPayload, err := s.GetCurrentPayloadForEntityKey(pBatch, key)
 						if err != nil {
 							return fmt.Errorf("failed to get latest payload: %w", err)
 						}
 
 						oldStringAttributes := latestPayload.StringAttributes
-
 						oldNumericAttributes := latestPayload.NumericAttributes
 
 						stringAttributes := maps.Clone(operation.Update.StringAttributes)
-
 						stringAttributes["$owner"] = strings.ToLower(operation.Update.Owner.Hex())
 						stringAttributes["$creator"] = oldStringAttributes.Values["$creator"]
 						stringAttributes["$key"] = strings.ToLower(operation.Update.Key.Hex())
@@ -285,71 +175,58 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						numericAttributes := maps.Clone(operation.Update.NumericAttributes)
 						numericAttributes["$expiration"] = uint64(untilBlock)
 						numericAttributes["$createdAtBlock"] = oldNumericAttributes.Values["$createdAtBlock"]
-
 						numericAttributes["$sequence"] = oldNumericAttributes.Values["$sequence"]
 						numericAttributes["$txIndex"] = oldNumericAttributes.Values["$txIndex"]
 						numericAttributes["$opIndex"] = oldNumericAttributes.Values["$opIndex"]
 						numericAttributes["$lastModifiedAtBlock"] = uint64(block.Number)
 
-						id, err := st.UpsertPayload(
-							ctx,
-							store.UpsertPayloadParams{
-								EntityKey:         key,
-								Payload:           operation.Update.Content,
-								ContentType:       operation.Update.ContentType,
-								StringAttributes:  store.NewStringAttributes(stringAttributes),
-								NumericAttributes: store.NewNumericAttributes(numericAttributes),
-							},
-						)
+						id, err := s.UpsertPayload(pBatch, pBatch, UpsertPayloadParams{
+							EntityKey:         key,
+							Payload:           operation.Update.Content,
+							ContentType:       operation.Update.ContentType,
+							StringAttributes:  store.NewStringAttributes(stringAttributes),
+							NumericAttributes: store.NewNumericAttributes(numericAttributes),
+						})
 						if err != nil {
-							return fmt.Errorf("failed to insert payload 0x%x at block %d txIndex %d opIndex %d: %w", key, block.Number, operation.TxIndex, operation.OpIndex, err)
+							return fmt.Errorf("failed to insert payload 0x%x at block %d txIndex %d opIndex %d: %w",
+								key, block.Number, operation.TxIndex, operation.OpIndex, err)
 						}
 
 						for k, v := range oldStringAttributes.Values {
-							err = cache.RemoveFromStringBitmap(ctx, k, v, id)
-							if err != nil {
+							if err := cache.RemoveFromStringBitmap(k, v, id); err != nil {
 								return fmt.Errorf("failed to remove string attribute value bitmap: %w", err)
 							}
 						}
 
 						for k, v := range oldNumericAttributes.Values {
-							// skip txIndex and opIndex because they are not used for querying
 							switch k {
 							case "$txIndex", "$opIndex":
 								continue
 							}
-
-							err = cache.RemoveFromNumericBitmap(ctx, k, v, id)
-							if err != nil {
+							if err := cache.RemoveFromNumericBitmap(k, v, id); err != nil {
 								return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
 							}
 						}
 
-						// TODO: delete entity from the indexes
-
 						for k, v := range stringAttributes {
-							err = cache.AddToStringBitmap(ctx, k, v, id)
-							if err != nil {
+							if err := cache.AddToStringBitmap(k, v, id); err != nil {
 								return fmt.Errorf("failed to add string attribute value bitmap: %w", err)
 							}
 						}
 
 						for k, v := range numericAttributes {
-							// skip txIndex and opIndex because they are not used for querying
 							switch k {
 							case "$txIndex", "$opIndex":
 								continue
 							}
-
-							err = cache.AddToNumericBitmap(ctx, k, v, id)
-							if err != nil {
+							if err := cache.AddToNumericBitmap(k, v, id); err != nil {
 								return fmt.Errorf("failed to add numeric attribute value bitmap: %w", err)
 							}
 						}
 
 					case operation.Delete != nil || operation.Expire != nil:
-
 						blockStat.deletes++
+
 						var key []byte
 						if operation.Delete != nil {
 							key = common.Hash(*operation.Delete).Bytes()
@@ -357,62 +234,49 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 							key = common.Hash(*operation.Expire).Bytes()
 						}
 
-						latestPayload, err := st.GetPayloadForEntityKey(ctx, key)
+						latestPayload, err := s.GetCurrentPayloadForEntityKey(pBatch, key)
 						if err != nil {
 							return fmt.Errorf("failed to get latest payload: %w", err)
 						}
 						blockStat.deletesBytes += int64(len(latestPayload.Payload))
 
-						oldStringAttributes := latestPayload.StringAttributes
-
-						oldNumericAttributes := latestPayload.NumericAttributes
-
-						for k, v := range oldStringAttributes.Values {
-							err = cache.RemoveFromStringBitmap(ctx, k, v, latestPayload.ID)
-							if err != nil {
+						for k, v := range latestPayload.StringAttributes.Values {
+							if err := cache.RemoveFromStringBitmap(k, v, latestPayload.ID); err != nil {
 								return fmt.Errorf("failed to remove string attribute value bitmap: %w", err)
 							}
 						}
 
-						for k, v := range oldNumericAttributes.Values {
-							// skip txIndex and opIndex because they are not used for querying
+						for k, v := range latestPayload.NumericAttributes.Values {
 							switch k {
 							case "$txIndex", "$opIndex":
 								continue
 							}
-
-							err = cache.RemoveFromNumericBitmap(ctx, k, v, latestPayload.ID)
-							if err != nil {
+							if err := cache.RemoveFromNumericBitmap(k, v, latestPayload.ID); err != nil {
 								return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
 							}
 						}
 
-						err = st.DeletePayloadForEntityKey(ctx, key)
-						if err != nil {
+						if err := s.DeletePayloadForEntityKey(pBatch, pBatch, key); err != nil {
 							return fmt.Errorf("failed to delete payload: %w", err)
 						}
 
 					case operation.ExtendBTL != nil:
-
 						blockStat.extends++
 
 						key := operation.ExtendBTL.Key.Bytes()
 
-						latestPayload, err := st.GetPayloadForEntityKey(ctx, key)
+						latestPayload, err := s.GetCurrentPayloadForEntityKey(pBatch, key)
 						if err != nil {
 							return fmt.Errorf("failed to get latest payload: %w", err)
 						}
 
-						oldNumericAttributes := latestPayload.NumericAttributes
-
-						oldExpiration := oldNumericAttributes.Values["$expiration"]
-
+						oldExpiration := latestPayload.NumericAttributes.Values["$expiration"]
 						newToBlock := oldExpiration + operation.ExtendBTL.BTL
 
-						numericAttributes := maps.Clone(oldNumericAttributes.Values)
+						numericAttributes := maps.Clone(latestPayload.NumericAttributes.Values)
 						numericAttributes["$expiration"] = uint64(newToBlock)
 
-						id, err := st.UpsertPayload(ctx, store.UpsertPayloadParams{
+						id, err := s.UpsertPayload(pBatch, pBatch, UpsertPayloadParams{
 							EntityKey:         key,
 							Payload:           latestPayload.Payload,
 							ContentType:       latestPayload.ContentType,
@@ -420,86 +284,80 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 							NumericAttributes: store.NewNumericAttributes(numericAttributes),
 						})
 						if err != nil {
-							return fmt.Errorf("failed to insert payload at block %d txIndex %d opIndex %d: %w", block.Number, operation.TxIndex, operation.OpIndex, err)
+							return fmt.Errorf("failed to insert payload at block %d txIndex %d opIndex %d: %w",
+								block.Number, operation.TxIndex, operation.OpIndex, err)
 						}
 
-						err = cache.RemoveFromNumericBitmap(ctx, "$expiration", oldExpiration, id)
-						if err != nil {
+						if err := cache.RemoveFromNumericBitmap("$expiration", oldExpiration, id); err != nil {
 							return fmt.Errorf("failed to remove numeric attribute value bitmap: %w", err)
 						}
 
-						err = cache.AddToNumericBitmap(ctx, "$expiration", newToBlock, id)
-						if err != nil {
+						if err := cache.AddToNumericBitmap("$expiration", newToBlock, id); err != nil {
 							return fmt.Errorf("failed to add numeric attribute value bitmap: %w", err)
 						}
 
 					case operation.ChangeOwner != nil:
 						blockStat.ownerChanges++
+
 						key := operation.ChangeOwner.Key.Bytes()
 
-						latestPayload, err := st.GetPayloadForEntityKey(ctx, key)
+						latestPayload, err := s.GetCurrentPayloadForEntityKey(pBatch, key)
 						if err != nil {
 							return fmt.Errorf("failed to get latest payload: %w", err)
 						}
 
-						stringAttributes := latestPayload.StringAttributes
-
-						oldOwner := stringAttributes.Values["$owner"]
-
+						oldOwner := latestPayload.StringAttributes.Values["$owner"]
 						newOwner := strings.ToLower(operation.ChangeOwner.Owner.Hex())
 
-						stringAttributes.Values["$owner"] = newOwner
+						latestPayload.StringAttributes.Values["$owner"] = newOwner
 
-						id, err := st.UpsertPayload(
-							ctx,
-							store.UpsertPayloadParams{
-								EntityKey:         key,
-								Payload:           latestPayload.Payload,
-								ContentType:       latestPayload.ContentType,
-								StringAttributes:  stringAttributes,
-								NumericAttributes: latestPayload.NumericAttributes,
-							},
-						)
+						id, err := s.UpsertPayload(pBatch, pBatch, UpsertPayloadParams{
+							EntityKey:         key,
+							Payload:           latestPayload.Payload,
+							ContentType:       latestPayload.ContentType,
+							StringAttributes:  latestPayload.StringAttributes,
+							NumericAttributes: latestPayload.NumericAttributes,
+						})
 						if err != nil {
-							return fmt.Errorf("failed to insert payload at block %d txIndex %d opIndex %d: %w", block.Number, operation.TxIndex, operation.OpIndex, err)
+							return fmt.Errorf("failed to insert payload at block %d txIndex %d opIndex %d: %w",
+								block.Number, operation.TxIndex, operation.OpIndex, err)
 						}
 
-						err = cache.RemoveFromStringBitmap(ctx, "$owner", oldOwner, id)
-						if err != nil {
+						if err := cache.RemoveFromStringBitmap("$owner", oldOwner, id); err != nil {
 							return fmt.Errorf("failed to remove string attribute value bitmap for owner: %w", err)
 						}
 
-						err = cache.AddToStringBitmap(ctx, "$owner", newOwner, id)
-						if err != nil {
+						if err := cache.AddToStringBitmap("$owner", newOwner, id); err != nil {
 							return fmt.Errorf("failed to add string attribute value bitmap for owner: %w", err)
 						}
 
 					default:
 						return fmt.Errorf("unknown operation: %v", operation)
 					}
-
 				}
 
-				// Log per block if needed, but we can now rely on the map for totals later
-				s.log.Info("block updated", "block", block.Number, "creates", blockStat.creates, "updates", blockStat.updates, "deletes", blockStat.deletes, "extends", blockStat.extends, "ownerChanges", blockStat.ownerChanges)
+				s.log.Info("block updated",
+					"block", block.Number,
+					"creates", blockStat.creates,
+					"updates", blockStat.updates,
+					"deletes", blockStat.deletes,
+					"extends", blockStat.extends,
+					"ownerChanges", blockStat.ownerChanges)
 			}
 
-			err = st.UpsertLastBlock(ctx, lastBlock)
-			if err != nil {
+			if err := s.UpsertLastBlock(pBatch, lastBlock); err != nil {
 				return fmt.Errorf("failed to upsert last block: %w", err)
 			}
 
-			err = cache.Flush(ctx)
-			if err != nil {
+			if err := cache.Flush(); err != nil {
 				return fmt.Errorf("failed to flush bitmap cache: %w", err)
 			}
 
-			err = tx.Commit()
-			if err != nil {
-				return fmt.Errorf("failed to commit transaction: %w", err)
+			if err := pBatch.Commit(pebble.Sync); err != nil {
+				return fmt.Errorf("failed to commit pebble batch: %w", err)
 			}
 
-			// Calculate batch totals for logging and update metrics PER BLOCK
+			// Calculate batch totals for logging and update metrics per block.
 			var (
 				totalCreates      int64
 				totalCreatesBytes int64
@@ -511,7 +369,6 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 				totalOwnerChanges int64
 			)
 
-			// Iterate blocks again to preserve order and update metrics per block
 			for _, block := range batch.Batch.Blocks {
 				if stat, ok := stats[block.Number]; ok {
 					totalCreates += stat.creates
@@ -523,7 +380,6 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 					totalExtends += stat.extends
 					totalOwnerChanges += stat.ownerChanges
 
-					// Update metrics specifically per block
 					if stat.creates > 0 {
 						metricCreates.Inc(stat.creates)
 					}
@@ -575,39 +431,4 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 	}
 
 	return nil
-}
-
-func (s *SQLiteStore) NewQueries() *store.Queries {
-	return store.New(s.readPool)
-}
-
-func (s *SQLiteStore) ReadTransaction(ctx context.Context, fn func(q *store.Queries) error) error {
-	tx, err := s.readPool.BeginTx(ctx, &sql.TxOptions{
-		ReadOnly: true,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	st := store.New(tx)
-
-	return fn(st)
-}
-
-func (s *SQLiteStore) GetNumberOfEntities(ctx context.Context) (numberOfEntities uint64, err error) {
-	err = s.ReadTransaction(ctx, func(q *store.Queries) error {
-		ni, err := q.GetNumberOfEntities(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get number of entities: %w", err)
-		}
-		numberOfEntities = uint64(ni)
-		return nil
-	})
-
-	if err != nil {
-		return 0, err
-	}
-
-	return numberOfEntities, nil
 }

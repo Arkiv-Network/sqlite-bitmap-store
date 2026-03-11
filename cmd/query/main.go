@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	sqlitestore "github.com/Arkiv-Network/sqlite-bitmap-store"
+	"github.com/Arkiv-Network/sqlite-bitmap-store/pebblestore"
 	"github.com/urfave/cli/v2"
 )
 
@@ -23,7 +23,7 @@ func main() {
 
 	app := &cli.App{
 		Name:  "query",
-		Usage: "Query the SQLite database",
+		Usage: "Query the PebbleDB database",
 		Flags: []cli.Flag{
 			&cli.PathFlag{
 				Name:        "db-path",
@@ -40,25 +40,19 @@ func main() {
 				return fmt.Errorf("query is required")
 			}
 
-			st, err := sqlitestore.NewSQLiteStore(logger, cfg.dbPath, 7)
+			st, err := pebblestore.NewPebbleStore(logger, cfg.dbPath)
 			if err != nil {
-				return fmt.Errorf("failed to create SQLite store: %w", err)
+				return fmt.Errorf("failed to create PebbleDB store: %w", err)
 			}
 			defer st.Close()
-
-			// q, err := query.Parse(queryString)
-			// if err != nil {
-			// 	return fmt.Errorf("failed to parse query: %w", err)
-			// }
 
 			startTime := time.Now()
 
 			r, err := st.QueryEntities(
 				context.Background(),
 				queryString,
-				// nil,
-				&sqlitestore.Options{
-					IncludeData: &sqlitestore.IncludeData{
+				&pebblestore.Options{
+					IncludeData: &pebblestore.IncludeData{
 						Key:                         true,
 						ContentType:                 true,
 						Payload:                     true,

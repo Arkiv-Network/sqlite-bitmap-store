@@ -11,7 +11,7 @@ import (
 
 	arkivevents "github.com/Arkiv-Network/arkiv-events"
 	"github.com/Arkiv-Network/arkiv-events/tariterator"
-	sqlitestore "github.com/Arkiv-Network/sqlite-bitmap-store"
+	"github.com/Arkiv-Network/sqlite-bitmap-store/pebblestore"
 	"github.com/urfave/cli/v2"
 )
 
@@ -25,7 +25,7 @@ func main() {
 
 	app := &cli.App{
 		Name:  "load-from-tar",
-		Usage: "Load data from a node into a SQLite database",
+		Usage: "Load data from a node into a PebbleDB database",
 		Flags: []cli.Flag{
 			&cli.PathFlag{
 				Name:        "db-path",
@@ -48,9 +48,9 @@ func main() {
 			}
 			defer tarFile.Close()
 
-			store, err := sqlitestore.NewSQLiteStore(logger, cfg.dbPath, 7)
+			store, err := pebblestore.NewPebbleStore(logger, cfg.dbPath)
 			if err != nil {
-				return fmt.Errorf("failed to create SQLite store: %w", err)
+				return fmt.Errorf("failed to create PebbleDB store: %w", err)
 			}
 			defer store.Close()
 
