@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -20,7 +22,8 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	cfg := struct {
-		dbPath string
+		dbPath    string
+		pprofAddr string
 	}{}
 
 	app := &cli.App{
@@ -33,8 +36,21 @@ func main() {
 				Destination: &cfg.dbPath,
 				EnvVars:     []string{"DB_PATH"},
 			},
+			&cli.StringFlag{
+				Name:        "pprof-addr",
+				Value:       "localhost:6060",
+				Destination: &cfg.pprofAddr,
+				EnvVars:     []string{"PPROF_ADDR"},
+			},
 		},
 		Action: func(c *cli.Context) error {
+
+			go func() {
+				logger.Info("starting pprof server", "addr", cfg.pprofAddr)
+				if err := http.ListenAndServe(cfg.pprofAddr, nil); err != nil {
+					logger.Error("pprof server failed", "error", err)
+				}
+			}()
 
 			tarFileName := c.Args().First()
 
