@@ -1,3 +1,3 @@
+// Package store provides shared types for the bitmap store: Bitmap,
+// StringAttributes, NumericAttributes, and bitmap chain reconstruction.
 package store
-
-//go:generate go tool sqlc generate

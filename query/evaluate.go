@@ -10,7 +10,7 @@ import (
 
 func (t *AST) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
+	q Evaluator,
 	block uint64,
 ) (*roaring64.Bitmap, error) {
 	if t.Expr == nil {
@@ -33,7 +33,7 @@ func (t *AST) Evaluate(
 
 func (e *ASTExpr) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
+	q Evaluator,
 	block uint64,
 ) (*roaring64.Bitmap, error) {
 	return e.Or.Evaluate(ctx, q, block)
@@ -41,7 +41,7 @@ func (e *ASTExpr) Evaluate(
 
 func (e *ASTOr) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
+	q Evaluator,
 	block uint64,
 ) (*roaring64.Bitmap, error) {
 	var tmp *roaring64.Bitmap = nil
@@ -63,7 +63,7 @@ func (e *ASTOr) Evaluate(
 
 func (e *ASTAnd) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
+	q Evaluator,
 	block uint64,
 ) (*roaring64.Bitmap, error) {
 	var tmp *roaring64.Bitmap = nil
@@ -85,7 +85,7 @@ func (e *ASTAnd) Evaluate(
 
 func (e *ASTTerm) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
+	q Evaluator,
 	block uint64,
 ) (*roaring64.Bitmap, error) {
 	switch {
@@ -110,7 +110,7 @@ func (e *ASTTerm) Evaluate(
 
 // reconstructAndOR fetches bitmap chains for each matching value, reconstructs
 // each bitmap at the target block, and ORs them together.
-func reconstructAndOR(ctx context.Context, q *store.Queries, block uint64, reconstructor func(value string) (*store.Bitmap, error), values []string) (*roaring64.Bitmap, error) {
+func reconstructAndOR(ctx context.Context, q Evaluator, block uint64, reconstructor func(value string) (*store.Bitmap, error), values []string) (*roaring64.Bitmap, error) {
 	bm := roaring64.New()
 	for _, val := range values {
 		reconstructed, err := reconstructor(val)
@@ -124,7 +124,7 @@ func reconstructAndOR(ctx context.Context, q *store.Queries, block uint64, recon
 	return bm, nil
 }
 
-func reconstructAndORNumeric(ctx context.Context, q *store.Queries, block uint64, name string, values []uint64) (*roaring64.Bitmap, error) {
+func reconstructAndORNumeric(ctx context.Context, q Evaluator, block uint64, name string, values []uint64) (*roaring64.Bitmap, error) {
 	bm := roaring64.New()
 	for _, val := range values {
 		reconstructed, err := q.ReconstructNumericBitmapAtBlock(ctx, name, val, block)
@@ -140,20 +140,16 @@ func reconstructAndORNumeric(ctx context.Context, q *store.Queries, block uint64
 
 func (e *Glob) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
+	q Evaluator,
 	block uint64,
 ) (_ *roaring64.Bitmap, err error) {
 	eb := store.EffectiveBlock(block)
 
 	var values []string
 	if e.IsNot {
-		values, err = q.GetMatchingStringValuesNotGlob(ctx, store.GetMatchingStringValuesNotGlobParams{
-			Name: e.Var, Value: e.Value, TargetBlock: eb,
-		})
+		values, err = q.GetMatchingStringValuesNotGlob(ctx, e.Var, e.Value, eb)
 	} else {
-		values, err = q.GetMatchingStringValuesGlob(ctx, store.GetMatchingStringValuesGlobParams{
-			Name: e.Var, Value: e.Value, TargetBlock: eb,
-		})
+		values, err = q.GetMatchingStringValuesGlob(ctx, e.Var, e.Value, eb)
 	}
 	if err != nil {
 		return nil, err
@@ -166,15 +162,13 @@ func (e *Glob) Evaluate(
 
 func (e *LessThan) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
+	q Evaluator,
 	block uint64,
 ) (_ *roaring64.Bitmap, err error) {
 	eb := store.EffectiveBlock(block)
 
 	if e.Value.String != nil {
-		values, err := q.GetMatchingStringValuesLessThan(ctx, store.GetMatchingStringValuesLessThanParams{
-			Name: e.Var, Value: *e.Value.String, TargetBlock: eb,
-		})
+		values, err := q.GetMatchingStringValuesLessThan(ctx, e.Var, *e.Value.String, eb)
 		if err != nil {
 			return nil, err
 		}
@@ -183,9 +177,7 @@ func (e *LessThan) Evaluate(
 		}, values)
 	}
 
-	values, err := q.GetMatchingNumericValuesLessThan(ctx, store.GetMatchingNumericValuesLessThanParams{
-		Name: e.Var, Value: *e.Value.Number, TargetBlock: eb,
-	})
+	values, err := q.GetMatchingNumericValuesLessThan(ctx, e.Var, *e.Value.Number, eb)
 	if err != nil {
 		return nil, err
 	}
@@ -194,15 +186,13 @@ func (e *LessThan) Evaluate(
 
 func (e *LessOrEqualThan) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
+	q Evaluator,
 	block uint64,
 ) (_ *roaring64.Bitmap, err error) {
 	eb := store.EffectiveBlock(block)
 
 	if e.Value.String != nil {
-		values, err := q.GetMatchingStringValuesLessOrEqualThan(ctx, store.GetMatchingStringValuesLessOrEqualThanParams{
-			Name: e.Var, Value: *e.Value.String, TargetBlock: eb,
-		})
+		values, err := q.GetMatchingStringValuesLessOrEqualThan(ctx, e.Var, *e.Value.String, eb)
 		if err != nil {
 			return nil, err
 		}
@@ -211,9 +201,7 @@ func (e *LessOrEqualThan) Evaluate(
 		}, values)
 	}
 
-	values, err := q.GetMatchingNumericValuesLessOrEqualThan(ctx, store.GetMatchingNumericValuesLessOrEqualThanParams{
-		Name: e.Var, Value: *e.Value.Number, TargetBlock: eb,
-	})
+	values, err := q.GetMatchingNumericValuesLessOrEqualThan(ctx, e.Var, *e.Value.Number, eb)
 	if err != nil {
 		return nil, err
 	}
@@ -222,15 +210,13 @@ func (e *LessOrEqualThan) Evaluate(
 
 func (e *GreaterThan) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
+	q Evaluator,
 	block uint64,
 ) (_ *roaring64.Bitmap, err error) {
 	eb := store.EffectiveBlock(block)
 
 	if e.Value.String != nil {
-		values, err := q.GetMatchingStringValuesGreaterThan(ctx, store.GetMatchingStringValuesGreaterThanParams{
-			Name: e.Var, Value: *e.Value.String, TargetBlock: eb,
-		})
+		values, err := q.GetMatchingStringValuesGreaterThan(ctx, e.Var, *e.Value.String, eb)
 		if err != nil {
 			return nil, err
 		}
@@ -239,9 +225,7 @@ func (e *GreaterThan) Evaluate(
 		}, values)
 	}
 
-	values, err := q.GetMatchingNumericValuesGreaterThan(ctx, store.GetMatchingNumericValuesGreaterThanParams{
-		Name: e.Var, Value: *e.Value.Number, TargetBlock: eb,
-	})
+	values, err := q.GetMatchingNumericValuesGreaterThan(ctx, e.Var, *e.Value.Number, eb)
 	if err != nil {
 		return nil, err
 	}
@@ -250,15 +234,13 @@ func (e *GreaterThan) Evaluate(
 
 func (e *GreaterOrEqualThan) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
+	q Evaluator,
 	block uint64,
 ) (_ *roaring64.Bitmap, err error) {
 	eb := store.EffectiveBlock(block)
 
 	if e.Value.String != nil {
-		values, err := q.GetMatchingStringValuesGreaterOrEqualThan(ctx, store.GetMatchingStringValuesGreaterOrEqualThanParams{
-			Name: e.Var, Value: *e.Value.String, TargetBlock: eb,
-		})
+		values, err := q.GetMatchingStringValuesGreaterOrEqualThan(ctx, e.Var, *e.Value.String, eb)
 		if err != nil {
 			return nil, err
 		}
@@ -267,9 +249,7 @@ func (e *GreaterOrEqualThan) Evaluate(
 		}, values)
 	}
 
-	values, err := q.GetMatchingNumericValuesGreaterOrEqualThan(ctx, store.GetMatchingNumericValuesGreaterOrEqualThanParams{
-		Name: e.Var, Value: *e.Value.Number, TargetBlock: eb,
-	})
+	values, err := q.GetMatchingNumericValuesGreaterOrEqualThan(ctx, e.Var, *e.Value.Number, eb)
 	if err != nil {
 		return nil, err
 	}
@@ -278,16 +258,14 @@ func (e *GreaterOrEqualThan) Evaluate(
 
 func (e *Equality) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
+	q Evaluator,
 	block uint64,
 ) (_ *roaring64.Bitmap, err error) {
 	eb := store.EffectiveBlock(block)
 
 	if e.Value.String != nil {
 		if e.IsNot {
-			values, err := q.GetMatchingStringValuesNotEqual(ctx, store.GetMatchingStringValuesNotEqualParams{
-				Name: e.Var, Value: *e.Value.String, TargetBlock: eb,
-			})
+			values, err := q.GetMatchingStringValuesNotEqual(ctx, e.Var, *e.Value.String, eb)
 			if err != nil {
 				return nil, err
 			}
@@ -304,9 +282,7 @@ func (e *Equality) Evaluate(
 	}
 
 	if e.IsNot {
-		values, err := q.GetMatchingNumericValuesNotEqual(ctx, store.GetMatchingNumericValuesNotEqualParams{
-			Name: e.Var, Value: *e.Value.Number, TargetBlock: eb,
-		})
+		values, err := q.GetMatchingNumericValuesNotEqual(ctx, e.Var, *e.Value.Number, eb)
 		if err != nil {
 			return nil, err
 		}
@@ -322,7 +298,7 @@ func (e *Equality) Evaluate(
 
 func (e *Inclusion) Evaluate(
 	ctx context.Context,
-	q *store.Queries,
+	q Evaluator,
 	block uint64,
 ) (_ *roaring64.Bitmap, err error) {
 	eb := store.EffectiveBlock(block)
@@ -330,13 +306,9 @@ func (e *Inclusion) Evaluate(
 	if len(e.Values.Strings) != 0 {
 		var values []string
 		if e.IsNot {
-			values, err = q.GetMatchingStringValuesNotInclusion(ctx, store.GetMatchingStringValuesNotInclusionParams{
-				Name: e.Var, Values: e.Values.Strings, TargetBlock: eb,
-			})
+			values, err = q.GetMatchingStringValuesNotInclusion(ctx, e.Var, e.Values.Strings, eb)
 		} else {
-			values, err = q.GetMatchingStringValuesInclusion(ctx, store.GetMatchingStringValuesInclusionParams{
-				Name: e.Var, Values: e.Values.Strings, TargetBlock: eb,
-			})
+			values, err = q.GetMatchingStringValuesInclusion(ctx, e.Var, e.Values.Strings, eb)
 		}
 		if err != nil {
 			return nil, err
@@ -348,13 +320,9 @@ func (e *Inclusion) Evaluate(
 
 	var values []uint64
 	if e.IsNot {
-		values, err = q.GetMatchingNumericValuesNotInclusion(ctx, store.GetMatchingNumericValuesNotInclusionParams{
-			Name: e.Var, Values: e.Values.Numbers, TargetBlock: eb,
-		})
+		values, err = q.GetMatchingNumericValuesNotInclusion(ctx, e.Var, e.Values.Numbers, eb)
 	} else {
-		values, err = q.GetMatchingNumericValuesInclusion(ctx, store.GetMatchingNumericValuesInclusionParams{
-			Name: e.Var, Values: e.Values.Numbers, TargetBlock: eb,
-		})
+		values, err = q.GetMatchingNumericValuesInclusion(ctx, e.Var, e.Values.Numbers, eb)
 	}
 	if err != nil {
 		return nil, err

@@ -1,27 +1,18 @@
-package sqlitebitmapstore
+package pebblestore
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"fmt"
-	"log/slog"
 	"maps"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/Arkiv-Network/sqlite-bitmap-store/store"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/sqlite3"
-	"github.com/golang-migrate/migrate/v4/source/iofs"
-	_ "github.com/mattn/go-sqlite3"
-
 	arkivevents "github.com/Arkiv-Network/arkiv-events"
 	"github.com/Arkiv-Network/arkiv-events/events"
+	"github.com/Arkiv-Network/sqlite-bitmap-store/store"
+	"github.com/cockroachdb/pebble"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 var (
@@ -38,82 +29,6 @@ var (
 	metricOperationTime       = metrics.NewRegisteredHistogram("arkiv_store/operation_time_ms", nil, metrics.NewExpDecaySample(100, 0.4))
 )
 
-type SQLiteStore struct {
-	writePool *sql.DB
-	readPool  *sql.DB
-	log       *slog.Logger
-}
-
-func NewSQLiteStore(
-	log *slog.Logger,
-	dbPath string,
-	numberOfReadThreads int,
-) (*SQLiteStore, error) {
-
-	err := os.MkdirAll(filepath.Dir(dbPath), 0755)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create directory: %w", err)
-	}
-
-	writeURL := fmt.Sprintf("file:%s?mode=rwc&_busy_timeout=11000&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true&_txlock=immediate&_cache_size=65536", dbPath)
-
-	writePool, err := sql.Open("sqlite3", writeURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open write pool: %w", err)
-	}
-
-	readURL := fmt.Sprintf("file:%s?_query_only=true&_busy_timeout=11000&_journal_mode=WAL&_auto_vacuum=incremental&_foreign_keys=true&_txlock=deferred&_cache_size=65536", dbPath)
-	readPool, err := sql.Open("sqlite3", readURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open read pool: %w", err)
-	}
-
-	readPool.SetMaxOpenConns(numberOfReadThreads)
-	readPool.SetMaxIdleConns(numberOfReadThreads)
-	readPool.SetConnMaxLifetime(0)
-	readPool.SetConnMaxIdleTime(0)
-
-	err = runMigrations(writePool)
-	if err != nil {
-		writePool.Close()
-		readPool.Close()
-		return nil, fmt.Errorf("failed to run migrations: %w", err)
-	}
-
-	return &SQLiteStore{writePool: writePool, readPool: readPool, log: log}, nil
-}
-
-func runMigrations(db *sql.DB) error {
-	sourceDriver, err := iofs.New(store.Migrations, "schema")
-	if err != nil {
-		return fmt.Errorf("failed to create migration source: %w", err)
-	}
-
-	dbDriver, err := sqlite3.WithInstance(db, &sqlite3.Config{})
-	if err != nil {
-		return fmt.Errorf("failed to create database driver: %w", err)
-	}
-
-	m, err := migrate.NewWithInstance("iofs", sourceDriver, "sqlite3", dbDriver)
-	if err != nil {
-		return fmt.Errorf("failed to create migrate instance: %w", err)
-	}
-
-	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		return fmt.Errorf("failed to run migrations: %w", err)
-	}
-
-	return nil
-}
-
-func (s *SQLiteStore) Close() error {
-	return s.writePool.Close()
-}
-
-func (s *SQLiteStore) GetLastBlock(ctx context.Context) (uint64, error) {
-	return store.New(s.writePool).GetLastBlock(ctx)
-}
-
 type blockStats struct {
 	creates      int64
 	createsBytes int64
@@ -125,7 +40,7 @@ type blockStats struct {
 	ownerChanges int64
 }
 
-func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.BatchIterator) error {
+func (s *PebbleStore) FollowEvents(ctx context.Context, iterator arkivevents.BatchIterator) error {
 
 	for batch := range iterator {
 		if batch.Error != nil {
@@ -136,22 +51,14 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 		err := func() error {
 
-			tx, err := s.writePool.BeginTx(ctx, &sql.TxOptions{
-				Isolation: sql.LevelSerializable,
-				ReadOnly:  false,
-			})
-			if err != nil {
-				return fmt.Errorf("failed to begin transaction: %w", err)
-			}
-			defer tx.Rollback()
-
-			st := store.New(tx)
+			pBatch := s.db.NewIndexedBatch()
+			defer pBatch.Close()
 
 			firstBlock := batch.Batch.Blocks[0].Number
 			lastBlock := batch.Batch.Blocks[len(batch.Batch.Blocks)-1].Number
 			s.log.Info("new batch", "firstBlock", firstBlock, "lastBlock", lastBlock)
 
-			lastBlockFromDB, err := st.GetLastBlock(ctx)
+			lastBlockFromDB, err := s.GetLastBlock(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to get last block from database: %w", err)
 			}
@@ -161,7 +68,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 			metricOperationStarted.Inc(1)
 
 			// Create bitmap cache once per batch; reuse across blocks.
-			cache := newBitmapCache(st, firstBlock)
+			cache := newBitmapCache(s, pBatch, pBatch, firstBlock)
 
 		mainLoop:
 			for _, block := range batch.Batch.Blocks {
@@ -215,14 +122,11 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						numericAttributes["$opIndex"] = uint64(operation.OpIndex)
 
 						// Close any existing version (handles re-creation after delete).
-						_ = st.ClosePayloadVersion(ctx, store.ClosePayloadVersionParams{
-							Block:     &block.Number,
-							EntityKey: operation.Create.Key.Bytes(),
-						})
+						_ = s.ClosePayloadVersion(pBatch, pBatch, operation.Create.Key.Bytes(), block.Number)
 
-						id, err := st.InsertPayload(
-							ctx,
-							store.InsertPayloadParams{
+						id, err := s.InsertPayload(
+							pBatch,
+							InsertPayloadParams{
 								EntityKey:         operation.Create.Key.Bytes(),
 								Payload:           operation.Create.Content,
 								ContentType:       operation.Create.ContentType,
@@ -265,7 +169,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 						key := operation.Update.Key.Bytes()
 
-						latestPayload, err := st.GetCurrentPayloadForEntityKey(ctx, key)
+						latestPayload, err := s.GetCurrentPayloadForEntityKey(pBatch, key)
 						if err != nil {
 							return fmt.Errorf("failed to get latest payload: %w", err)
 						}
@@ -288,17 +192,14 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						numericAttributes["$opIndex"] = oldNumericAttributes.Values["$opIndex"]
 						numericAttributes["$lastModifiedAtBlock"] = uint64(block.Number)
 
-						err = st.ClosePayloadVersion(ctx, store.ClosePayloadVersionParams{
-							Block:     &block.Number,
-							EntityKey: key,
-						})
+						err = s.ClosePayloadVersion(pBatch, pBatch, key, block.Number)
 						if err != nil {
 							return fmt.Errorf("failed to close payload version: %w", err)
 						}
 
-						newID, err := st.InsertPayload(
-							ctx,
-							store.InsertPayloadParams{
+						newID, err := s.InsertPayload(
+							pBatch,
+							InsertPayloadParams{
 								EntityKey:         key,
 								Payload:           operation.Update.Content,
 								ContentType:       operation.Update.ContentType,
@@ -356,7 +257,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 							key = common.Hash(*operation.Expire).Bytes()
 						}
 
-						latestPayload, err := st.GetCurrentPayloadForEntityKey(ctx, key)
+						latestPayload, err := s.GetCurrentPayloadForEntityKey(pBatch, key)
 						if err != nil {
 							return fmt.Errorf("failed to get latest payload: %w", err)
 						}
@@ -380,10 +281,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 							}
 						}
 
-						err = st.ClosePayloadVersion(ctx, store.ClosePayloadVersionParams{
-							Block:     &block.Number,
-							EntityKey: key,
-						})
+						err = s.ClosePayloadVersion(pBatch, pBatch, key, block.Number)
 						if err != nil {
 							return fmt.Errorf("failed to close payload version: %w", err)
 						}
@@ -393,7 +291,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 						key := operation.ExtendBTL.Key.Bytes()
 
-						latestPayload, err := st.GetCurrentPayloadForEntityKey(ctx, key)
+						latestPayload, err := s.GetCurrentPayloadForEntityKey(pBatch, key)
 						if err != nil {
 							return fmt.Errorf("failed to get latest payload: %w", err)
 						}
@@ -404,15 +302,12 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						numericAttributes := maps.Clone(latestPayload.NumericAttributes.Values)
 						numericAttributes["$expiration"] = uint64(newToBlock)
 
-						err = st.ClosePayloadVersion(ctx, store.ClosePayloadVersionParams{
-							Block:     &block.Number,
-							EntityKey: key,
-						})
+						err = s.ClosePayloadVersion(pBatch, pBatch, key, block.Number)
 						if err != nil {
 							return fmt.Errorf("failed to close payload version: %w", err)
 						}
 
-						newID, err := st.InsertPayload(ctx, store.InsertPayloadParams{
+						newID, err := s.InsertPayload(pBatch, InsertPayloadParams{
 							EntityKey:         key,
 							Payload:           latestPayload.Payload,
 							ContentType:       latestPayload.ContentType,
@@ -438,7 +333,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						blockStat.ownerChanges++
 						key := operation.ChangeOwner.Key.Bytes()
 
-						latestPayload, err := st.GetCurrentPayloadForEntityKey(ctx, key)
+						latestPayload, err := s.GetCurrentPayloadForEntityKey(pBatch, key)
 						if err != nil {
 							return fmt.Errorf("failed to get latest payload: %w", err)
 						}
@@ -449,17 +344,14 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 						newStringAttrs := &store.StringAttributes{Values: maps.Clone(latestPayload.StringAttributes.Values)}
 						newStringAttrs.Values["$owner"] = newOwner
 
-						err = st.ClosePayloadVersion(ctx, store.ClosePayloadVersionParams{
-							Block:     &block.Number,
-							EntityKey: key,
-						})
+						err = s.ClosePayloadVersion(pBatch, pBatch, key, block.Number)
 						if err != nil {
 							return fmt.Errorf("failed to close payload version: %w", err)
 						}
 
-						newID, err := st.InsertPayload(
-							ctx,
-							store.InsertPayloadParams{
+						newID, err := s.InsertPayload(
+							pBatch,
+							InsertPayloadParams{
 								EntityKey:         key,
 								Payload:           latestPayload.Payload,
 								ContentType:       latestPayload.ContentType,
@@ -496,14 +388,14 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 				return fmt.Errorf("failed to flush bitmap cache: %w", err)
 			}
 
-			err = st.UpsertLastBlock(ctx, lastBlock)
+			err = s.UpsertLastBlock(pBatch, lastBlock)
 			if err != nil {
 				return fmt.Errorf("failed to upsert last block: %w", err)
 			}
 
-			err = tx.Commit()
+			err = pBatch.Commit(pebble.Sync)
 			if err != nil {
-				return fmt.Errorf("failed to commit transaction: %w", err)
+				return fmt.Errorf("failed to commit batch: %w", err)
 			}
 
 			var (
@@ -579,39 +471,4 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 	}
 
 	return nil
-}
-
-func (s *SQLiteStore) NewQueries() *store.Queries {
-	return store.New(s.readPool)
-}
-
-func (s *SQLiteStore) ReadTransaction(ctx context.Context, fn func(q *store.Queries) error) error {
-	tx, err := s.readPool.BeginTx(ctx, &sql.TxOptions{
-		ReadOnly: true,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	st := store.New(tx)
-
-	return fn(st)
-}
-
-func (s *SQLiteStore) GetNumberOfEntities(ctx context.Context) (numberOfEntities uint64, err error) {
-	err = s.ReadTransaction(ctx, func(q *store.Queries) error {
-		ni, err := q.GetNumberOfEntities(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to get number of entities: %w", err)
-		}
-		numberOfEntities = uint64(ni)
-		return nil
-	})
-
-	if err != nil {
-		return 0, err
-	}
-
-	return numberOfEntities, nil
 }

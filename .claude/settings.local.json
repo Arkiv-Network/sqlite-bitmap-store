@@ -11,7 +11,8 @@
       "Bash(go mod tidy:*)",
       "Bash(mkdir:*)",
       "Bash(grep:*)",
-      "Bash(go vet:*)"
+      "Bash(go vet:*)",
+      "Bash(git -C /Users/dragan/arkiv/sqlite-bitmap-store log --oneline -20)"
     ]
   }
 }

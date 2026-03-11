@@ -1,9 +1,7 @@
 package store
 
 import (
-	"database/sql/driver"
 	"encoding/json"
-	"fmt"
 )
 
 type NumericAttributes struct {
@@ -14,45 +12,13 @@ func NewNumericAttributes(values map[string]uint64) *NumericAttributes {
 	return &NumericAttributes{Values: values}
 }
 
-// Scanner interface for reading from DB
-func (b *NumericAttributes) Scan(src any) error {
+func (b *NumericAttributes) MarshalJSON() ([]byte, error) {
+	return json.Marshal(b.Values)
+}
 
+func (b *NumericAttributes) UnmarshalJSON(data []byte) error {
 	if b.Values == nil {
 		b.Values = make(map[string]uint64)
 	}
-
-	if src == nil {
-		return nil
-	}
-
-	var data []byte
-
-	switch v := src.(type) {
-	case string:
-		data = []byte(v)
-	case []byte:
-		data = v
-	default:
-		return fmt.Errorf("expected string or []byte, got %T", src)
-	}
-
-	err := json.Unmarshal(data, &b)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal string attributes: %w", err)
-	}
-
-	return err
-}
-
-// Valuer interface for writing to DB
-func (b *NumericAttributes) Value() (driver.Value, error) {
-	if b.Values == nil {
-		return nil, nil
-	}
-
-	data, err := json.Marshal(b)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal string attributes: %w", err)
-	}
-	return data, nil
+	return json.Unmarshal(data, &b.Values)
 }

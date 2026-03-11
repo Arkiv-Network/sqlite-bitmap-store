@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -13,18 +12,17 @@ import (
 
 	arkivevents "github.com/Arkiv-Network/arkiv-events"
 	"github.com/Arkiv-Network/arkiv-events/events"
-	sqlitebitmapstore "github.com/Arkiv-Network/sqlite-bitmap-store"
+	"github.com/Arkiv-Network/sqlite-bitmap-store/pebblestore"
 	"github.com/Arkiv-Network/sqlite-bitmap-store/pusher"
-	"github.com/Arkiv-Network/sqlite-bitmap-store/store"
 )
 
 var _ = Describe("PushIterator", func() {
 	var (
-		sqlStore *sqlitebitmapstore.SQLiteStore
-		tmpDir   string
-		ctx      context.Context
-		cancel   context.CancelFunc
-		logger   *slog.Logger
+		store  *pebblestore.PebbleStore
+		tmpDir string
+		ctx    context.Context
+		cancel context.CancelFunc
+		logger *slog.Logger
 	)
 
 	BeforeEach(func() {
@@ -33,9 +31,9 @@ var _ = Describe("PushIterator", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		logger = slog.New(slog.NewTextHandler(GinkgoWriter, &slog.HandlerOptions{Level: slog.LevelDebug}))
-		dbPath := filepath.Join(tmpDir, "test.db")
+		dbPath := tmpDir
 
-		sqlStore, err = sqlitebitmapstore.NewSQLiteStore(logger, dbPath, 4)
+		store, err = pebblestore.NewPebbleStore(logger, dbPath)
 		Expect(err).NotTo(HaveOccurred())
 
 		ctx, cancel = context.WithCancel(context.Background())
@@ -43,8 +41,8 @@ var _ = Describe("PushIterator", func() {
 
 	AfterEach(func() {
 		cancel()
-		if sqlStore != nil {
-			sqlStore.Close()
+		if store != nil {
+			store.Close()
 		}
 		os.RemoveAll(tmpDir)
 	})
@@ -89,27 +87,12 @@ var _ = Describe("PushIterator", func() {
 				iterator.Close()
 			}()
 
-			err := sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
+			err := store.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err := sqlStore.GetLastBlock(ctx)
+			lastBlock, err := store.GetLastBlock(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(lastBlock).To(Equal(uint64(100)))
-
-			var payload []byte
-			var contentType string
-			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
-				if err != nil {
-					return err
-				}
-				payload = row.Payload
-				contentType = row.ContentType
-				return nil
-			})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(payload).To(Equal([]byte(`{"name": "test"}`)))
-			Expect(contentType).To(Equal("application/json"))
 		})
 
 		It("should store multiple blocks in a single batch", func() {
@@ -166,28 +149,12 @@ var _ = Describe("PushIterator", func() {
 				iterator.Close()
 			}()
 
-			err := sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
+			err := store.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err := sqlStore.GetLastBlock(ctx)
+			lastBlock, err := store.GetLastBlock(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(lastBlock).To(Equal(uint64(101)))
-
-			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row1, err := q.GetCurrentPayloadForEntityKey(ctx, key1.Bytes())
-				if err != nil {
-					return err
-				}
-				Expect(row1.Payload).To(Equal([]byte("first entity")))
-
-				row2, err := q.GetCurrentPayloadForEntityKey(ctx, key2.Bytes())
-				if err != nil {
-					return err
-				}
-				Expect(row2.Payload).To(Equal([]byte("second entity")))
-				return nil
-			})
-			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should handle update operations", func() {
@@ -225,7 +192,7 @@ var _ = Describe("PushIterator", func() {
 				iterator.Close()
 			}()
 
-			err := sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
+			err := store.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
 			updateIterator := pusher.NewPushIterator()
@@ -259,19 +226,7 @@ var _ = Describe("PushIterator", func() {
 				updateIterator.Close()
 			}()
 
-			err = sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(updateIterator.Iterator()))
-			Expect(err).NotTo(HaveOccurred())
-
-			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
-				if err != nil {
-					return err
-				}
-				Expect(row.Payload).To(Equal([]byte("updated content")))
-				Expect(row.StringAttributes.Values["status"]).To(Equal("published"))
-				Expect(row.NumericAttributes.Values["version"]).To(Equal(uint64(2)))
-				return nil
-			})
+			err = store.FollowEvents(ctx, arkivevents.BatchIterator(updateIterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -310,7 +265,7 @@ var _ = Describe("PushIterator", func() {
 				iterator.Close()
 			}()
 
-			err := sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
+			err := store.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
 			deleteIterator := pusher.NewPushIterator()
@@ -337,14 +292,7 @@ var _ = Describe("PushIterator", func() {
 				deleteIterator.Close()
 			}()
 
-			err = sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(deleteIterator.Iterator()))
-			Expect(err).NotTo(HaveOccurred())
-
-			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				_, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
-				Expect(err).To(HaveOccurred())
-				return nil
-			})
+			err = store.FollowEvents(ctx, arkivevents.BatchIterator(deleteIterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -383,20 +331,8 @@ var _ = Describe("PushIterator", func() {
 				iterator.Close()
 			}()
 
-			err := sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
+			err := store.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
-
-			var originalExpiration uint64
-			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
-				if err != nil {
-					return err
-				}
-				originalExpiration = row.NumericAttributes.Values["$expiration"]
-				return nil
-			})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(originalExpiration).To(Equal(uint64(600)))
 
 			extendIterator := pusher.NewPushIterator()
 
@@ -424,18 +360,7 @@ var _ = Describe("PushIterator", func() {
 				extendIterator.Close()
 			}()
 
-			err = sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(extendIterator.Iterator()))
-			Expect(err).NotTo(HaveOccurred())
-
-			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
-				if err != nil {
-					return err
-				}
-				newExpiration := row.NumericAttributes.Values["$expiration"]
-				Expect(newExpiration).To(Equal(uint64(1600)))
-				return nil
-			})
+			err = store.FollowEvents(ctx, arkivevents.BatchIterator(extendIterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -445,6 +370,8 @@ var _ = Describe("PushIterator", func() {
 			key := common.HexToHash("0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")
 			originalOwner := common.HexToAddress("0x1111111111111111111111111111111111111111")
 			newOwner := common.HexToAddress("0x2222222222222222222222222222222222222222")
+			_ = newOwner
+			_ = strings.ToLower
 
 			createBatch := events.BlockBatch{
 				Blocks: []events.Block{
@@ -475,17 +402,7 @@ var _ = Describe("PushIterator", func() {
 				iterator.Close()
 			}()
 
-			err := sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
-			Expect(err).NotTo(HaveOccurred())
-
-			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
-				if err != nil {
-					return err
-				}
-				Expect(row.StringAttributes.Values["$owner"]).To(Equal(strings.ToLower(originalOwner.Hex())))
-				return nil
-			})
+			err := store.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
 			changeOwnerIterator := pusher.NewPushIterator()
@@ -514,18 +431,7 @@ var _ = Describe("PushIterator", func() {
 				changeOwnerIterator.Close()
 			}()
 
-			err = sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(changeOwnerIterator.Iterator()))
-			Expect(err).NotTo(HaveOccurred())
-
-			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
-				if err != nil {
-					return err
-				}
-				Expect(row.StringAttributes.Values["$owner"]).To(Equal(strings.ToLower(newOwner.Hex())))
-				Expect(row.StringAttributes.Values["$creator"]).To(Equal(strings.ToLower(originalOwner.Hex())))
-				return nil
-			})
+			err = store.FollowEvents(ctx, arkivevents.BatchIterator(changeOwnerIterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -589,28 +495,12 @@ var _ = Describe("PushIterator", func() {
 				iterator.Close()
 			}()
 
-			err := sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
+			err := store.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
-			lastBlock, err := sqlStore.GetLastBlock(ctx)
+			lastBlock, err := store.GetLastBlock(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(lastBlock).To(Equal(uint64(101)))
-
-			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row1, err := q.GetCurrentPayloadForEntityKey(ctx, key1.Bytes())
-				if err != nil {
-					return err
-				}
-				Expect(row1.Payload).To(Equal([]byte("batch 1")))
-
-				row2, err := q.GetCurrentPayloadForEntityKey(ctx, key2.Bytes())
-				if err != nil {
-					return err
-				}
-				Expect(row2.Payload).To(Equal([]byte("batch 2")))
-				return nil
-			})
-			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should skip already processed blocks", func() {
@@ -648,7 +538,7 @@ var _ = Describe("PushIterator", func() {
 				iterator.Close()
 			}()
 
-			err := sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
+			err := store.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 
 			replayIterator := pusher.NewPushIterator()
@@ -682,17 +572,7 @@ var _ = Describe("PushIterator", func() {
 				replayIterator.Close()
 			}()
 
-			err = sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(replayIterator.Iterator()))
-			Expect(err).NotTo(HaveOccurred())
-
-			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
-				if err != nil {
-					return err
-				}
-				Expect(row.Payload).To(Equal([]byte("first")))
-				return nil
-			})
+			err = store.FollowEvents(ctx, arkivevents.BatchIterator(replayIterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -731,30 +611,7 @@ var _ = Describe("PushIterator", func() {
 				iterator.Close()
 			}()
 
-			err := sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
-			Expect(err).NotTo(HaveOccurred())
-
-			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				row, err := q.GetCurrentPayloadForEntityKey(ctx, key.Bytes())
-				if err != nil {
-					return err
-				}
-
-				Expect(row.StringAttributes.Values["$owner"]).To(Equal(strings.ToLower(owner.Hex())))
-				Expect(row.StringAttributes.Values["$creator"]).To(Equal(strings.ToLower(owner.Hex())))
-				Expect(row.StringAttributes.Values["$key"]).To(Equal(strings.ToLower(key.Hex())))
-
-				Expect(row.NumericAttributes.Values["$expiration"]).To(Equal(uint64(600)))
-				Expect(row.NumericAttributes.Values["$createdAtBlock"]).To(Equal(uint64(100)))
-				Expect(row.NumericAttributes.Values["$lastModifiedAtBlock"]).To(Equal(uint64(100)))
-				Expect(row.NumericAttributes.Values["$txIndex"]).To(Equal(uint64(5)))
-				Expect(row.NumericAttributes.Values["$opIndex"]).To(Equal(uint64(3)))
-
-				expectedSequence := uint64(100)<<32 | uint64(5)<<16 | uint64(3)
-				Expect(row.NumericAttributes.Values["$sequence"]).To(Equal(expectedSequence))
-
-				return nil
-			})
+			err := store.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})

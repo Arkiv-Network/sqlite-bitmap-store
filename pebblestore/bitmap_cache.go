@@ -1,8 +1,10 @@
-package sqlitebitmapstore
+package pebblestore
 
 import (
 	"context"
 	"fmt"
+
+	"github.com/cockroachdb/pebble"
 
 	"github.com/Arkiv-Network/sqlite-bitmap-store/store"
 )
@@ -13,8 +15,10 @@ type nameValue[T any] struct {
 }
 
 type bitmapCache struct {
-	st    *store.Queries
-	block uint64
+	store  *PebbleStore
+	reader pebble.Reader // for reading existing bitmaps
+	batch  *pebble.Batch // for writing
+	block  uint64
 
 	stringBitmaps  map[nameValue[string]]*store.Bitmap
 	numericBitmaps map[nameValue[uint64]]*store.Bitmap
@@ -28,9 +32,11 @@ type bitmapCache struct {
 	numericDeltaCounts map[nameValue[uint64]]int64
 }
 
-func newBitmapCache(st *store.Queries, block uint64) *bitmapCache {
+func newBitmapCache(s *PebbleStore, reader pebble.Reader, batch *pebble.Batch, block uint64) *bitmapCache {
 	return &bitmapCache{
-		st:                 st,
+		store:              s,
+		reader:             reader,
+		batch:              batch,
 		block:              block,
 		stringBitmaps:      make(map[nameValue[string]]*store.Bitmap),
 		numericBitmaps:     make(map[nameValue[uint64]]*store.Bitmap),
@@ -49,17 +55,15 @@ func cloneBitmap(bm *store.Bitmap) *store.Bitmap {
 }
 
 func (c *bitmapCache) loadStringBitmap(ctx context.Context, k nameValue[string]) (*store.Bitmap, error) {
-	bitmap, err := c.st.ReconstructLatestStringBitmap(ctx, k.name, k.value)
+	bitmap, err := c.store.ReconstructLatestStringBitmap(c.reader, k.name, k.value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to reconstruct string bitmap %q=%q: %w", k.name, k.value, err)
 	}
 	c.stringOldBitmaps[k] = cloneBitmap(bitmap)
 	c.stringBitmaps[k] = bitmap
 
-	// Seed delta count from DB so we know when next keyframe is due.
-	deltaCount, err := c.st.CountDeltasSinceLastKeyframeString(ctx, store.CountDeltasSinceLastKeyframeStringParams{
-		Name: k.name, Value: k.value,
-	})
+	// Seed delta count so we know when next keyframe is due.
+	deltaCount, err := c.store.CountDeltasSinceLastKeyframeString(c.reader, k.name, k.value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count deltas for string %q=%q: %w", k.name, k.value, err)
 	}
@@ -69,16 +73,14 @@ func (c *bitmapCache) loadStringBitmap(ctx context.Context, k nameValue[string])
 }
 
 func (c *bitmapCache) loadNumericBitmap(ctx context.Context, k nameValue[uint64]) (*store.Bitmap, error) {
-	bitmap, err := c.st.ReconstructLatestNumericBitmap(ctx, k.name, k.value)
+	bitmap, err := c.store.ReconstructLatestNumericBitmap(c.reader, k.name, k.value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to reconstruct numeric bitmap %q=%d: %w", k.name, k.value, err)
 	}
 	c.numericOldBitmaps[k] = cloneBitmap(bitmap)
 	c.numericBitmaps[k] = bitmap
 
-	deltaCount, err := c.st.CountDeltasSinceLastKeyframeNumeric(ctx, store.CountDeltasSinceLastKeyframeNumericParams{
-		Name: k.name, Value: k.value,
-	})
+	deltaCount, err := c.store.CountDeltasSinceLastKeyframeNumeric(c.reader, k.name, k.value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count deltas for numeric %q=%d: %w", k.name, k.value, err)
 	}
@@ -176,23 +178,11 @@ func (c *bitmapCache) Flush(ctx context.Context) (err error) {
 		isKeyframe := c.stringDeltaCounts[k] >= store.KeyframeInterval || oldBitmap.IsEmpty()
 
 		if isKeyframe {
-			err = c.st.InsertStringBitmapEntry(ctx, store.InsertStringBitmapEntryParams{
-				Name:         k.name,
-				Value:        k.value,
-				Block:        c.block,
-				IsFullBitmap: true,
-				Bitmap:       newBitmap,
-			})
+			err = c.store.InsertStringBitmapEntry(c.batch, k.name, k.value, c.block, true, newBitmap)
 			c.stringDeltaCounts[k] = 0
 		} else {
 			delta := store.ComputeDelta(oldBitmap.Bitmap, newBitmap.Bitmap)
-			err = c.st.InsertStringBitmapEntry(ctx, store.InsertStringBitmapEntryParams{
-				Name:         k.name,
-				Value:        k.value,
-				Block:        c.block,
-				IsFullBitmap: false,
-				Bitmap:       delta,
-			})
+			err = c.store.InsertStringBitmapEntry(c.batch, k.name, k.value, c.block, false, delta)
 			c.stringDeltaCounts[k]++
 		}
 		if err != nil {
@@ -217,23 +207,11 @@ func (c *bitmapCache) Flush(ctx context.Context) (err error) {
 		isKeyframe := c.numericDeltaCounts[k] >= store.KeyframeInterval || oldBitmap.IsEmpty()
 
 		if isKeyframe {
-			err = c.st.InsertNumericBitmapEntry(ctx, store.InsertNumericBitmapEntryParams{
-				Name:         k.name,
-				Value:        k.value,
-				Block:        c.block,
-				IsFullBitmap: true,
-				Bitmap:       newBitmap,
-			})
+			err = c.store.InsertNumericBitmapEntry(c.batch, k.name, k.value, c.block, true, newBitmap)
 			c.numericDeltaCounts[k] = 0
 		} else {
 			delta := store.ComputeDelta(oldBitmap.Bitmap, newBitmap.Bitmap)
-			err = c.st.InsertNumericBitmapEntry(ctx, store.InsertNumericBitmapEntryParams{
-				Name:         k.name,
-				Value:        k.value,
-				Block:        c.block,
-				IsFullBitmap: false,
-				Bitmap:       delta,
-			})
+			err = c.store.InsertNumericBitmapEntry(c.batch, k.name, k.value, c.block, false, delta)
 			c.numericDeltaCounts[k]++
 		}
 		if err != nil {
