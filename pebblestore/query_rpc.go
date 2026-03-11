@@ -231,12 +231,14 @@ func (s *PebbleStore) QueryEntities(
 
 	// Wait for the block height to reach the requested atBlock, polling
 	// with a 3-second timeout.
+	var lastBlock uint64
 	{
 		timeoutCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		defer cancel()
 
 		for {
-			lastBlock, err := s.GetLastBlock(ctx)
+			var err error
+			lastBlock, err = s.GetLastBlock(ctx)
 			if err != nil {
 				return nil, fmt.Errorf("error getting last block: %w", err)
 			}
@@ -251,6 +253,12 @@ func (s *PebbleStore) QueryEntities(
 			}
 		}
 		cancel()
+	}
+
+	// The effective query block: the requested atBlock, or the latest block.
+	queryBlock := options.GetAtBlock()
+	if queryBlock == 0 {
+		queryBlock = lastBlock
 	}
 
 	q, err := query.Parse(queryStr)
@@ -287,7 +295,7 @@ func (s *PebbleStore) QueryEntities(
 
 	res := &QueryResponse{
 		Data:        []json.RawMessage{},
-		BlockNumber: 0,
+		BlockNumber: hexutil.Uint64(queryBlock),
 		Cursor:      nil,
 	}
 
