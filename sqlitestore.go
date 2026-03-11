@@ -160,6 +160,9 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 
 			metricOperationStarted.Inc(1)
 
+			// Create bitmap cache once per batch; reuse across blocks.
+			cache := newBitmapCache(st, firstBlock)
+
 		mainLoop:
 			for _, block := range batch.Batch.Blocks {
 
@@ -173,8 +176,7 @@ func (s *SQLiteStore) FollowEvents(ctx context.Context, iterator arkivevents.Bat
 				}
 				blockStat := stats[block.Number]
 
-				// Per-block bitmap cache for bitemporality.
-				cache := newBitmapCache(st, block.Number)
+				cache.SetBlock(block.Number)
 
 				updatesMap := map[common.Hash][]*events.OPUpdate{}
 
