@@ -309,6 +309,9 @@ func (e *Glob) invert() *Glob {
 func (e *LessThan) Normalize() *LessThan {
 	switch e.Var {
 	case KeyAttributeKey, OwnerAttributeKey, CreatorAttributeKey:
+		if e.Value.String == nil {
+			return e
+		}
 		val := strings.ToLower(*e.Value.String)
 		return &LessThan{
 			Var: e.Var,
@@ -331,6 +334,9 @@ func (e *LessThan) invert() *GreaterOrEqualThan {
 func (e *LessOrEqualThan) Normalize() *LessOrEqualThan {
 	switch e.Var {
 	case KeyAttributeKey, OwnerAttributeKey, CreatorAttributeKey:
+		if e.Value.String == nil {
+			return e
+		}
 		val := strings.ToLower(*e.Value.String)
 		return &LessOrEqualThan{
 			Var: e.Var,
@@ -353,6 +359,9 @@ func (e *LessOrEqualThan) invert() *GreaterThan {
 func (e *GreaterThan) Normalize() *GreaterThan {
 	switch e.Var {
 	case KeyAttributeKey, OwnerAttributeKey, CreatorAttributeKey:
+		if e.Value.String == nil {
+			return e
+		}
 		val := strings.ToLower(*e.Value.String)
 		return &GreaterThan{
 			Var: e.Var,
@@ -375,6 +384,9 @@ func (e *GreaterThan) invert() *LessOrEqualThan {
 func (e *GreaterOrEqualThan) Normalize() *GreaterOrEqualThan {
 	switch e.Var {
 	case KeyAttributeKey, OwnerAttributeKey, CreatorAttributeKey:
+		if e.Value.String == nil {
+			return e
+		}
 		val := strings.ToLower(*e.Value.String)
 		return &GreaterOrEqualThan{
 			Var: e.Var,
@@ -397,6 +409,9 @@ func (e *GreaterOrEqualThan) invert() *LessThan {
 func (e *Equality) Normalize() *Equality {
 	switch e.Var {
 	case KeyAttributeKey, OwnerAttributeKey, CreatorAttributeKey:
+		if e.Value.String == nil {
+			return e
+		}
 		val := strings.ToLower(*e.Value.String)
 		return &Equality{
 			Var:   e.Var,
