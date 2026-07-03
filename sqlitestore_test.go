@@ -1190,4 +1190,124 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
+
+	Describe("range queries after the int64 storage change", func() {
+		// Helper: run a numeric range eval and return the set of matching
+		// payload keys (by their "name" string attribute for readability).
+		type rangeCase struct {
+			op    string
+			bound uint64
+		}
+
+		var runRange func(q *store.Queries, attr string, c rangeCase) []uint64
+
+		BeforeEach(func() {
+			runRange = func(q *store.Queries, attr string, c rangeCase) []uint64 {
+				var (
+					bitmaps []*store.Bitmap
+					err     error
+				)
+				params := struct {
+					Name  string
+					Value int64
+				}{attr, store.NumericValueToSQL(c.bound)}
+
+				switch c.op {
+				case "<":
+					bitmaps, err = q.EvaluateNumericAttributeValueLowerThan(ctx, store.EvaluateNumericAttributeValueLowerThanParams(params))
+				case "<=":
+					bitmaps, err = q.EvaluateNumericAttributeValueLessOrEqualThan(ctx, store.EvaluateNumericAttributeValueLessOrEqualThanParams(params))
+				case ">":
+					bitmaps, err = q.EvaluateNumericAttributeValueGreaterThan(ctx, store.EvaluateNumericAttributeValueGreaterThanParams(params))
+				case ">=":
+					bitmaps, err = q.EvaluateNumericAttributeValueGreaterOrEqualThan(ctx, store.EvaluateNumericAttributeValueGreaterOrEqualThanParams(params))
+				}
+				Expect(err).NotTo(HaveOccurred())
+
+				combined := store.NewBitmap()
+				for _, bm := range bitmaps {
+					combined.Or(bm.Bitmap)
+				}
+				return combined.ToArray()
+			}
+		})
+
+		follow := func(numericAttrsPerKey map[common.Hash]map[string]uint64) {
+			iterator := pusher.NewPushIterator()
+			ops := []events.Operation{}
+			txIndex := uint64(0)
+			for key, attrs := range numericAttrsPerKey {
+				ops = append(ops, events.Operation{
+					TxIndex: txIndex,
+					OpIndex: 0,
+					Create: &events.OPCreate{
+						Key:               key,
+						ContentType:       "application/json",
+						BTL:               1000,
+						Owner:             common.HexToAddress("0x1234567890123456789012345678901234567890"),
+						Content:           []byte(`{}`),
+						StringAttributes:  map[string]string{"kind": "range-test"},
+						NumericAttributes: attrs,
+					},
+				})
+				txIndex++
+			}
+			batch := events.BlockBatch{Blocks: []events.Block{{Number: 100, Operations: ops}}}
+
+			go func() {
+				defer GinkgoRecover()
+				iterator.Push(ctx, batch)
+				iterator.Close()
+			}()
+			Expect(sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))).To(Succeed())
+		}
+
+		It("keeps range queries exact when all values are below 2^63 (all pre-existing data)", func() {
+			// Values below 2^63 are stored as the very same number as before
+			// this change, so <, <=, >, >= must behave identically.
+			follow(map[common.Hash]map[string]uint64{
+				common.HexToHash("0x01"): {"priority": 5},
+				common.HexToHash("0x02"): {"priority": 100},
+				common.HexToHash("0x03"): {"priority": 7000},
+			})
+
+			err := sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
+				Expect(runRange(q, "priority", rangeCase{"<", 50})).To(HaveLen(1))     // {5}
+				Expect(runRange(q, "priority", rangeCase{"<=", 100})).To(HaveLen(2))   // {5, 100}
+				Expect(runRange(q, "priority", rangeCase{">", 50})).To(HaveLen(2))     // {100, 7000}
+				Expect(runRange(q, "priority", rangeCase{">=", 7000})).To(HaveLen(1))  // {7000}
+				Expect(runRange(q, "priority", rangeCase{">", 7000})).To(BeEmpty())    // {}
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("documents the known trade-off: values of 2^63+ sort as if negative in range queries", func() {
+			// These assertions pin the DOCUMENTED Fix-A limitation, they do not
+			// bless it as correct. A value >= 2^63 is stored as a negative
+			// int64, so range comparisons place it BELOW small values instead
+			// of above. Equality and IN lookups on the same value are exact
+			// (covered by the spec above).
+			//
+			// When the order-preserving re-encoding + data migration lands
+			// (the planned follow-up), the huge entity must switch sides and
+			// these assertions must be flipped.
+			follow(map[common.Hash]map[string]uint64{
+				common.HexToHash("0x0a"): {"size": 100},
+				common.HexToHash("0x0b"): {"size": 1 << 63}, // huge
+			})
+
+			err := sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
+				// Numerically, size > 50 should match BOTH entities. Today the
+				// huge one is missed because it is stored negative.
+				Expect(runRange(q, "size", rangeCase{">", 50})).To(HaveLen(1))
+
+				// Numerically, size < 50 should match NOTHING. Today the huge
+				// entity is wrongly included.
+				Expect(runRange(q, "size", rangeCase{"<", 50})).To(HaveLen(1))
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
 })
