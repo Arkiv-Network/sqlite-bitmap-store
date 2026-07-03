@@ -16,7 +16,7 @@ WHERE name = ? AND value = ?
 
 type DeleteNumericAttributeValueBitmapParams struct {
 	Name  string
-	Value uint64
+	Value int64
 }
 
 func (q *Queries) DeleteNumericAttributeValueBitmap(ctx context.Context, arg DeleteNumericAttributeValueBitmapParams) error {
@@ -67,7 +67,7 @@ WHERE name = ? AND value = ?
 
 type GetNumericAttributeValueBitmapParams struct {
 	Name  string
-	Value uint64
+	Value int64
 }
 
 func (q *Queries) GetNumericAttributeValueBitmap(ctx context.Context, arg GetNumericAttributeValueBitmapParams) (*Bitmap, error) {
@@ -142,7 +142,7 @@ ON CONFLICT (name, value) DO UPDATE SET bitmap = excluded.bitmap
 
 type UpsertNumericAttributeValueBitmapParams struct {
 	Name   string
-	Value  uint64
+	Value  int64
 	Bitmap *Bitmap
 }
 

@@ -80,7 +80,7 @@ func (c *bitmapCache) AddToNumericBitmap(ctx context.Context, name string, value
 	k := nameValue[uint64]{name: name, value: value}
 	bitmap, ok := c.numericBitmaps[k]
 	if !ok {
-		bitmap, err = c.st.GetNumericAttributeValueBitmap(ctx, store.GetNumericAttributeValueBitmapParams{Name: name, Value: value})
+		bitmap, err = c.st.GetNumericAttributeValueBitmap(ctx, store.GetNumericAttributeValueBitmapParams{Name: name, Value: store.NumericValueToSQL(value)})
 
 		if err != nil && err != sql.ErrNoRows {
 			return fmt.Errorf("failed to get numeric attribute %q value %q bitmap: %w", name, value, err)
@@ -103,7 +103,7 @@ func (c *bitmapCache) RemoveFromNumericBitmap(ctx context.Context, name string, 
 	k := nameValue[uint64]{name: name, value: value}
 	bitmap, ok := c.numericBitmaps[k]
 	if !ok {
-		bitmap, err = c.st.GetNumericAttributeValueBitmap(ctx, store.GetNumericAttributeValueBitmapParams{Name: name, Value: value})
+		bitmap, err = c.st.GetNumericAttributeValueBitmap(ctx, store.GetNumericAttributeValueBitmapParams{Name: name, Value: store.NumericValueToSQL(value)})
 
 		if err != nil && err != sql.ErrNoRows {
 			return fmt.Errorf("failed to get numeric attribute %q value %q bitmap: %w", name, value, err)
@@ -172,14 +172,14 @@ func (c *bitmapCache) Flush(ctx context.Context) (err error) {
 	for k, bitmap := range c.numericBitmaps {
 
 		if bitmap.IsEmpty() {
-			err = c.st.DeleteNumericAttributeValueBitmap(ctx, store.DeleteNumericAttributeValueBitmapParams{Name: k.name, Value: k.value})
+			err = c.st.DeleteNumericAttributeValueBitmap(ctx, store.DeleteNumericAttributeValueBitmapParams{Name: k.name, Value: store.NumericValueToSQL(k.value)})
 			if err != nil {
 				return fmt.Errorf("failed to delete numeric attribute %q value %q bitmap: %w", k.name, k.value, err)
 			}
 			continue
 		}
 
-		err = c.st.UpsertNumericAttributeValueBitmap(ctx, store.UpsertNumericAttributeValueBitmapParams{Name: k.name, Value: k.value, Bitmap: bitmap})
+		err = c.st.UpsertNumericAttributeValueBitmap(ctx, store.UpsertNumericAttributeValueBitmapParams{Name: k.name, Value: store.NumericValueToSQL(k.value), Bitmap: bitmap})
 		if err != nil {
 			return fmt.Errorf("failed to upsert numeric attribute %q value %q bitmap: %w", k.name, k.value, err)
 		}

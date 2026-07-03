@@ -150,7 +150,7 @@ func (e *LessThan) Evaluate(
 	} else {
 		bitmaps, err = q.EvaluateNumericAttributeValueLowerThan(ctx, store.EvaluateNumericAttributeValueLowerThanParams{
 			Name:  e.Var,
-			Value: *e.Value.Number,
+			Value: store.NumericValueToSQL(*e.Value.Number),
 		})
 		if err != nil {
 			return nil, err
@@ -184,7 +184,7 @@ func (e *LessOrEqualThan) Evaluate(
 	} else {
 		bitmaps, err = q.EvaluateNumericAttributeValueLessOrEqualThan(ctx, store.EvaluateNumericAttributeValueLessOrEqualThanParams{
 			Name:  e.Var,
-			Value: *e.Value.Number,
+			Value: store.NumericValueToSQL(*e.Value.Number),
 		})
 		if err != nil {
 			return nil, err
@@ -219,7 +219,7 @@ func (e *GreaterThan) Evaluate(
 	} else {
 		bitmaps, err = q.EvaluateNumericAttributeValueGreaterThan(ctx, store.EvaluateNumericAttributeValueGreaterThanParams{
 			Name:  e.Var,
-			Value: *e.Value.Number,
+			Value: store.NumericValueToSQL(*e.Value.Number),
 		})
 		if err != nil {
 			return nil, err
@@ -254,7 +254,7 @@ func (e *GreaterOrEqualThan) Evaluate(
 	} else {
 		bitmaps, err = q.EvaluateNumericAttributeValueGreaterOrEqualThan(ctx, store.EvaluateNumericAttributeValueGreaterOrEqualThanParams{
 			Name:  e.Var,
-			Value: *e.Value.Number,
+			Value: store.NumericValueToSQL(*e.Value.Number),
 		})
 		if err != nil {
 			return nil, err
@@ -318,7 +318,7 @@ func (e *Equality) Evaluate(
 			var bitmaps []*store.Bitmap
 			bitmaps, err = q.EvaluateNumericAttributeValueNotEqual(ctx, store.EvaluateNumericAttributeValueNotEqualParams{
 				Name:  e.Var,
-				Value: *e.Value.Number,
+				Value: store.NumericValueToSQL(*e.Value.Number),
 			})
 			if err != nil {
 				return nil, err
@@ -333,7 +333,7 @@ func (e *Equality) Evaluate(
 		} else {
 			bitmap, err := q.EvaluateNumericAttributeValueEqual(ctx, store.EvaluateNumericAttributeValueEqualParams{
 				Name:  e.Var,
-				Value: *e.Value.Number,
+				Value: store.NumericValueToSQL(*e.Value.Number),
 			})
 
 			if err == sql.ErrNoRows {
@@ -389,7 +389,7 @@ func (e *Inclusion) Evaluate(
 		if e.IsNot {
 			bitmaps, err = q.EvaluateNumericAttributeValueNotInclusion(ctx, store.EvaluateNumericAttributeValueNotInclusionParams{
 				Name:   e.Var,
-				Values: e.Values.Numbers,
+				Values: store.NumericValuesToSQL(e.Values.Numbers),
 			})
 			if err != nil {
 				return nil, err
@@ -397,7 +397,7 @@ func (e *Inclusion) Evaluate(
 		} else {
 			bitmaps, err = q.EvaluateNumericAttributeValueInclusion(ctx, store.EvaluateNumericAttributeValueInclusionParams{
 				Name:   e.Var,
-				Values: e.Values.Numbers,
+				Values: store.NumericValuesToSQL(e.Values.Numbers),
 			})
 			if err != nil {
 				return nil, err
