@@ -24,8 +24,11 @@ sql:
             go_type: 
               type: "NumericAttributes"
               pointer: true
+          # Stored top-bit-flipped so the full uint64 range fits SQLite's
+          # signed INTEGER in order-preserving fashion; see numeric_value.go.
           - column: "numeric_attributes_values_bitmaps.value"
-            go_type: "uint64"
+            go_type:
+              type: "NumericValue"
           - column: "string_attributes_values_bitmaps.bitmap"
             go_type: 
               type: "Bitmap"

@@ -45,7 +45,7 @@ WHERE name = ?1 AND value = ?2
 
 type EvaluateNumericAttributeValueEqualParams struct {
 	Name  string
-	Value uint64
+	Value NumericValue
 }
 
 func (q *Queries) EvaluateNumericAttributeValueEqual(ctx context.Context, arg EvaluateNumericAttributeValueEqualParams) (*Bitmap, error) {
@@ -62,7 +62,7 @@ WHERE name = ?1 AND value >= ?2
 
 type EvaluateNumericAttributeValueGreaterOrEqualThanParams struct {
 	Name  string
-	Value uint64
+	Value NumericValue
 }
 
 func (q *Queries) EvaluateNumericAttributeValueGreaterOrEqualThan(ctx context.Context, arg EvaluateNumericAttributeValueGreaterOrEqualThanParams) ([]*Bitmap, error) {
@@ -95,7 +95,7 @@ WHERE name = ?1 AND value > ?2
 
 type EvaluateNumericAttributeValueGreaterThanParams struct {
 	Name  string
-	Value uint64
+	Value NumericValue
 }
 
 func (q *Queries) EvaluateNumericAttributeValueGreaterThan(ctx context.Context, arg EvaluateNumericAttributeValueGreaterThanParams) ([]*Bitmap, error) {
@@ -128,7 +128,7 @@ WHERE name = ?1 AND value IN (/*SLICE:values*/?)
 
 type EvaluateNumericAttributeValueInclusionParams struct {
 	Name   string
-	Values []uint64
+	Values []NumericValue
 }
 
 func (q *Queries) EvaluateNumericAttributeValueInclusion(ctx context.Context, arg EvaluateNumericAttributeValueInclusionParams) ([]*Bitmap, error) {
@@ -172,7 +172,7 @@ WHERE name = ?1 AND value <= ?2
 
 type EvaluateNumericAttributeValueLessOrEqualThanParams struct {
 	Name  string
-	Value uint64
+	Value NumericValue
 }
 
 func (q *Queries) EvaluateNumericAttributeValueLessOrEqualThan(ctx context.Context, arg EvaluateNumericAttributeValueLessOrEqualThanParams) ([]*Bitmap, error) {
@@ -205,7 +205,7 @@ WHERE name = ?1 AND value < ?2
 
 type EvaluateNumericAttributeValueLowerThanParams struct {
 	Name  string
-	Value uint64
+	Value NumericValue
 }
 
 func (q *Queries) EvaluateNumericAttributeValueLowerThan(ctx context.Context, arg EvaluateNumericAttributeValueLowerThanParams) ([]*Bitmap, error) {
@@ -238,7 +238,7 @@ WHERE name = ?1 AND value != ?2
 
 type EvaluateNumericAttributeValueNotEqualParams struct {
 	Name  string
-	Value uint64
+	Value NumericValue
 }
 
 func (q *Queries) EvaluateNumericAttributeValueNotEqual(ctx context.Context, arg EvaluateNumericAttributeValueNotEqualParams) ([]*Bitmap, error) {
@@ -271,7 +271,7 @@ WHERE name = ?1 AND value NOT IN (/*SLICE:values*/?)
 
 type EvaluateNumericAttributeValueNotInclusionParams struct {
 	Name   string
-	Values []uint64
+	Values []NumericValue
 }
 
 func (q *Queries) EvaluateNumericAttributeValueNotInclusion(ctx context.Context, arg EvaluateNumericAttributeValueNotInclusionParams) ([]*Bitmap, error) {
