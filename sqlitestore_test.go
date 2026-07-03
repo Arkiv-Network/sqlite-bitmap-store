@@ -2,6 +2,7 @@ package sqlitebitmapstore_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"log/slog"
 	"math"
@@ -164,7 +165,7 @@ var _ = Describe("SQLiteStore", func() {
 				// Query by numeric attribute: version = 1
 				version1Bitmap, err := q.EvaluateNumericAttributeValueEqual(ctx, store.EvaluateNumericAttributeValueEqualParams{
 					Name:  "version",
-					Value: 1,
+					Value: store.NumericValueToSQL(1),
 				})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(version1Bitmap).NotTo(BeNil())
@@ -180,7 +181,7 @@ var _ = Describe("SQLiteStore", func() {
 				// Query by numeric attribute: version > 1
 				versionGT1Bitmaps, err := q.EvaluateNumericAttributeValueGreaterThan(ctx, store.EvaluateNumericAttributeValueGreaterThanParams{
 					Name:  "version",
-					Value: 1,
+					Value: store.NumericValueToSQL(1),
 				})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(versionGT1Bitmaps).To(HaveLen(1))
@@ -202,7 +203,7 @@ var _ = Describe("SQLiteStore", func() {
 				// Query by numeric attribute: priority >= 10
 				priorityGTE10Bitmaps, err := q.EvaluateNumericAttributeValueGreaterOrEqualThan(ctx, store.EvaluateNumericAttributeValueGreaterOrEqualThanParams{
 					Name:  "priority",
-					Value: 10,
+					Value: store.NumericValueToSQL(10),
 				})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(priorityGTE10Bitmaps).To(HaveLen(2))
@@ -604,14 +605,14 @@ var _ = Describe("SQLiteStore", func() {
 				// Verify old expiration bitmap is removed
 				oldExpBitmap, err := q.EvaluateNumericAttributeValueEqual(ctx, store.EvaluateNumericAttributeValueEqualParams{
 					Name:  "$expiration",
-					Value: 600,
+					Value: store.NumericValueToSQL(600),
 				})
 				Expect(err).To(HaveOccurred())
 
 				// Verify new expiration bitmap exists
 				newExpBitmap, err := q.EvaluateNumericAttributeValueEqual(ctx, store.EvaluateNumericAttributeValueEqualParams{
 					Name:  "$expiration",
-					Value: 1600,
+					Value: store.NumericValueToSQL(1600),
 				})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(newExpBitmap.ToArray()).To(HaveLen(1))
@@ -1282,29 +1283,90 @@ var _ = Describe("SQLiteStore", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("documents the known trade-off: values of 2^63+ sort as if negative in range queries", func() {
-			// These assertions pin the DOCUMENTED Fix-A limitation, they do not
-			// bless it as correct. A value >= 2^63 is stored as a negative
-			// int64, so range comparisons place it BELOW small values instead
-			// of above. Equality and IN lookups on the same value are exact
-			// (covered by the spec above).
-			//
-			// When the order-preserving re-encoding + data migration lands
-			// (the planned follow-up), the huge entity must switch sides and
-			// these assertions must be flipped.
+		It("orders values of 2^63 and above correctly in range queries", func() {
+			// The stored form is value XOR 2^63 (as int64), which is strictly
+			// increasing over the whole uint64 range, so SQL's signed
+			// comparison must agree with numeric comparison even across the
+			// 2^63 boundary.
 			follow(map[common.Hash]map[string]uint64{
 				common.HexToHash("0x0a"): {"size": 100},
-				common.HexToHash("0x0b"): {"size": 1 << 63}, // huge
+				common.HexToHash("0x0b"): {"size": 1 << 63},        // just past the boundary
+				common.HexToHash("0x0c"): {"size": math.MaxUint64}, // largest possible
 			})
 
 			err := sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
-				// Numerically, size > 50 should match BOTH entities. Today the
-				// huge one is missed because it is stored negative.
-				Expect(runRange(q, "size", rangeCase{">", 50})).To(HaveLen(1))
+				Expect(runRange(q, "size", rangeCase{">", 50})).To(HaveLen(3))                    // all of them
+				Expect(runRange(q, "size", rangeCase{"<", 50})).To(BeEmpty())                     // none
+				Expect(runRange(q, "size", rangeCase{">", 100})).To(HaveLen(2))                   // the two huge ones
+				Expect(runRange(q, "size", rangeCase{">=", 1 << 63})).To(HaveLen(2))              // both at/above 2^63
+				Expect(runRange(q, "size", rangeCase{">", 1 << 63})).To(HaveLen(1))               // only MaxUint64
+				Expect(runRange(q, "size", rangeCase{"<", 1 << 63})).To(HaveLen(1))               // only 100
+				Expect(runRange(q, "size", rangeCase{">=", math.MaxUint64})).To(HaveLen(1))       // only MaxUint64
+				Expect(runRange(q, "size", rangeCase{"<=", math.MaxUint64})).To(HaveLen(3))       // everything
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
 
-				// Numerically, size < 50 should match NOTHING. Today the huge
-				// entity is wrongly included.
-				Expect(runRange(q, "size", rangeCase{"<", 50})).To(HaveLen(1))
+	Describe("migration 000002 on a database written before the encoding change", func() {
+		It("re-encodes existing rows so old data keeps answering queries correctly", func() {
+			// Build a database the way released versions wrote it: schema at
+			// migration version 1, numeric values stored raw. Opening the
+			// store must migrate it and both equality and range queries must
+			// keep working on the old rows.
+			dbPath := filepath.Join(tmpDir, "legacy.db")
+
+			raw, err := sql.Open("sqlite3", "file:"+dbPath+"?mode=rwc&_journal_mode=WAL")
+			Expect(err).NotTo(HaveOccurred())
+
+			initSQL, err := store.Migrations.ReadFile("schema/000001_init.up.sql")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = raw.Exec(string(initSQL))
+			Expect(err).NotTo(HaveOccurred())
+
+			// golang-migrate's version table, pinned at version 1.
+			_, err = raw.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (version uint64, dirty bool);
+				DELETE FROM schema_migrations; INSERT INTO schema_migrations (version, dirty) VALUES (1, 0);`)
+			Expect(err).NotTo(HaveOccurred())
+
+			// A row exactly as the pre-fix code stored it: raw value 100.
+			legacyBitmap := store.NewBitmap()
+			legacyBitmap.Add(7)
+			blob, err := legacyBitmap.Value()
+			Expect(err).NotTo(HaveOccurred())
+			_, err = raw.Exec(`INSERT INTO numeric_attributes_values_bitmaps (name, value, bitmap) VALUES (?, ?, ?)`,
+				"legacy", int64(100), blob)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(raw.Close()).To(Succeed())
+
+			// Opening the store runs migration 000002.
+			legacyStore, err := sqlitebitmapstore.NewSQLiteStore(logger, dbPath, 2)
+			Expect(err).NotTo(HaveOccurred())
+			defer legacyStore.Close()
+
+			err = legacyStore.ReadTransaction(ctx, func(q *store.Queries) error {
+				bitmap, err := q.EvaluateNumericAttributeValueEqual(ctx, store.EvaluateNumericAttributeValueEqualParams{
+					Name:  "legacy",
+					Value: store.NumericValueToSQL(100),
+				})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(bitmap).NotTo(BeNil())
+				Expect(bitmap.ToArray()).To(Equal([]uint64{7}))
+
+				greater, err := q.EvaluateNumericAttributeValueGreaterThan(ctx, store.EvaluateNumericAttributeValueGreaterThanParams{
+					Name:  "legacy",
+					Value: store.NumericValueToSQL(50),
+				})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(greater).To(HaveLen(1))
+
+				lower, err := q.EvaluateNumericAttributeValueLowerThan(ctx, store.EvaluateNumericAttributeValueLowerThanParams{
+					Name:  "legacy",
+					Value: store.NumericValueToSQL(50),
+				})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(lower).To(BeEmpty())
 				return nil
 			})
 			Expect(err).NotTo(HaveOccurred())
