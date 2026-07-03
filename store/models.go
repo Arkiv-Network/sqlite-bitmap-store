@@ -11,7 +11,7 @@ type LastBlock struct {
 
 type NumericAttributesValuesBitmap struct {
 	Name   string
-	Value  uint64
+	Value  int64
 	Bitmap *Bitmap
 }
 

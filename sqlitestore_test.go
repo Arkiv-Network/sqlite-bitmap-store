@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1095,6 +1096,94 @@ var _ = Describe("SQLiteStore", func() {
 				// Verify sequence calculation
 				expectedSequence := uint64(100)<<32 | uint64(5)<<16 | uint64(3)
 				Expect(row.NumericAttributes.Values["$sequence"]).To(Equal(expectedSequence))
+
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	Describe("FollowEvents with numeric attribute values of 2^63 or more", func() {
+		It("should index the entity and find it again by equality", func() {
+			// Regression test: values with the top bit set used to fail at the
+			// database layer ("uint64 values with high bit set are not
+			// supported"), which permanently stopped the event follower.
+			iterator := pusher.NewPushIterator()
+
+			key := common.HexToHash("0x3333333333333333333333333333333333333333333333333333333333333333")
+			owner := common.HexToAddress("0x1234567890123456789012345678901234567890")
+
+			batch := events.BlockBatch{
+				Blocks: []events.Block{
+					{
+						Number: 100,
+						Operations: []events.Operation{
+							{
+								TxIndex: 0,
+								OpIndex: 0,
+								Create: &events.OPCreate{
+									Key:         key,
+									ContentType: "application/json",
+									BTL:         1000,
+									Owner:       owner,
+									Content:     []byte(`{"name": "huge numbers"}`),
+									StringAttributes: map[string]string{
+										"type": "huge",
+									},
+									NumericAttributes: map[string]uint64{
+										"big":     math.MaxUint64,
+										"alsoBig": 1 << 63,
+										"small":   7,
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			go func() {
+				defer GinkgoRecover()
+				iterator.Push(ctx, batch)
+				iterator.Close()
+			}()
+
+			err := sqlStore.FollowEvents(ctx, arkivevents.BatchIterator(iterator.Iterator()))
+			Expect(err).NotTo(HaveOccurred())
+
+			lastBlock, err := sqlStore.GetLastBlock(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(lastBlock).To(Equal(uint64(100)))
+
+			err = sqlStore.ReadTransaction(ctx, func(q *store.Queries) error {
+				for name, value := range map[string]uint64{
+					"big":     math.MaxUint64,
+					"alsoBig": 1 << 63,
+					"small":   7,
+				} {
+					bitmap, err := q.EvaluateNumericAttributeValueEqual(ctx, store.EvaluateNumericAttributeValueEqualParams{
+						Name:  name,
+						Value: store.NumericValueToSQL(value),
+					})
+					Expect(err).NotTo(HaveOccurred(), "equality lookup for %q", name)
+					Expect(bitmap).NotTo(BeNil())
+
+					ids := bitmap.ToArray()
+					Expect(ids).To(HaveLen(1))
+
+					payloads, err := q.RetrievePayloads(ctx, ids)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(payloads).To(HaveLen(1))
+					Expect(payloads[0].NumericAttributes.Values[name]).To(Equal(value))
+				}
+
+				// Inclusion (IN) lookups must round-trip huge values too.
+				bitmaps, err := q.EvaluateNumericAttributeValueInclusion(ctx, store.EvaluateNumericAttributeValueInclusionParams{
+					Name:   "big",
+					Values: store.NumericValuesToSQL([]uint64{math.MaxUint64, 42}),
+				})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(bitmaps).To(HaveLen(1))
 
 				return nil
 			})

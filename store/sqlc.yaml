@@ -24,8 +24,12 @@ sql:
             go_type: 
               type: "NumericAttributes"
               pointer: true
+          # The value column holds uint64 numeric attribute values as their
+          # int64 bit pattern: SQLite integers are signed 64-bit, and Go's
+          # database/sql refuses to bind uint64 values >= 2^63. Convert at
+          # the call sites with NumericValueToSQL / NumericValuesToSQL.
           - column: "numeric_attributes_values_bitmaps.value"
-            go_type: "uint64"
+            go_type: "int64"
           - column: "string_attributes_values_bitmaps.bitmap"
             go_type: 
               type: "Bitmap"
